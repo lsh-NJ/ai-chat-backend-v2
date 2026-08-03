@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Identity,
+    Index,
     String,
     Text,
     func,
@@ -27,6 +28,9 @@ class Message(Base):
             "role IN ('user', 'assistant', 'system')",
             name="ck_messages_role",
         ),
+        Index("idx_messages_conversation_id_id",
+            "conversation_id", "id"
+        ),
     )
 
     id: Mapped[int] = mapped_column(
@@ -39,12 +43,12 @@ class Message(Base):
         BigInteger,
         ForeignKey("conversations.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     role: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
+        index=True,
     )
 
     content: Mapped[str] = mapped_column(
