@@ -75,16 +75,16 @@ ai-chat-backend-v2/
 ### 任务
 
 - [x] 编写一页 `REQUIREMENTS.md`
-- [ ] 写清 v2 保留的接口、请求体、响应体和状态码
-- [ ] 设计 `conversations` 表
-- [ ] 设计 `messages` 表
-- [ ] 确定主键、外键、非空约束和角色约束
-- [ ] 为消息历史查询设计 `(conversation_id, id)` 组合索引
-- [ ] 启动本地 PostgreSQL
-- [ ] 创建开发数据库和独立测试数据库
-- [ ] 使用原生 SQL 手动完成一次创建会话、保存消息和查询历史
-- [ ] 用事务制造一次错误并验证回滚
-- [ ] 记录为什么本项目从 SQLite 迁移到 PostgreSQL
+- [x] 写清 v2 保留的接口、请求体、响应体和状态码
+- [x] 设计 `conversations` 表
+- [x] 设计 `messages` 表
+- [x] 确定主键、外键、非空约束和角色约束
+- [x] 为消息历史查询设计 `(conversation_id, id)` 组合索引
+- [x] 启动本地 PostgreSQL
+- [x] 创建开发数据库和独立测试数据库
+- [x] 使用原生 SQL 手动完成一次创建会话、保存消息和查询历史
+- [x] 用事务制造一次错误并验证回滚
+- [x] 记录为什么本项目从 SQLite 迁移到 PostgreSQL
 
 ### 推荐数据模型
 
@@ -117,11 +117,11 @@ index
 
 ### Day 1 验收
 
-- [ ] 不看旧代码，能画出两张表及关系
-- [ ] 能写 SQL 查询某个会话按顺序排列的全部消息
-- [ ] 能解释为什么使用 `(conversation_id, id)` 索引
-- [ ] 能解释外键、索引和事务分别解决什么问题
-- [ ] 开发库和测试库名称明确且互不相同
+- [x] 不看旧代码，能画出两张表及关系
+- [x] 能写 SQL 查询某个会话按顺序排列的全部消息
+- [x] 能解释为什么使用 `(conversation_id, id)` 索引
+- [x] 能解释外键、索引和事务分别解决什么问题
+- [x] 开发库和测试库名称明确且互不相同
 
 ---
 
@@ -129,16 +129,16 @@ index
 
 ### 任务
 
-- [ ] 安装并记录 SQLAlchemy、异步 PostgreSQL Driver 和 Alembic 依赖
-- [ ] 使用环境变量配置 `DATABASE_URL`
-- [ ] 创建 `AsyncEngine`
-- [ ] 创建 `async_sessionmaker`
-- [ ] 实现每个请求独立的 `AsyncSession`
-- [ ] 使用 `DeclarativeBase` 建立 ORM Base
-- [ ] 使用 `Mapped` 和 `mapped_column` 定义两个 ORM Model
-- [ ] 定义外键、relationship、约束和组合索引
-- [ ] 写最小脚本或测试验证增删改查
-- [ ] 确认代码中没有 `metadata.create_all()`
+- [x] 安装并记录 SQLAlchemy、异步 PostgreSQL Driver 和 Alembic 依赖
+- [x] 使用环境变量配置 `DATABASE_URL`
+- [x] 创建 `AsyncEngine`
+- [x] 创建 `async_sessionmaker`
+- [x] 实现每个请求独立的 `AsyncSession`
+- [x] 使用 `DeclarativeBase` 建立 ORM Base
+- [x] 使用 `Mapped` 和 `mapped_column` 定义两个 ORM Model
+- [x] 定义外键、relationship、约束和组合索引
+- [x] 写最小脚本或测试验证增删改查
+- [x] 确认代码中没有 `metadata.create_all()`（测试 fixture 里的临时建表除外，Day 3 接入 Alembic 后移除）
 
 ### 只补这些知识
 
@@ -149,14 +149,14 @@ index
 - `flush()`、`commit()`、`rollback()` 和 `refresh()`
 - request-scoped Session
 - lazy loading 与 N+1 问题只需建立概念
+  - 进行显性加载解决
 
 ### Day 2 验收
 
-- [ ] 能解释 Engine、连接池和 Session 的职责
-- [ ] 能解释 `flush` 与 `commit` 的区别
-- [ ] 能使用 AsyncSession 创建并查询一条会话
-- [ ] 关闭应用后数据库连接能够正确释放
-- [ ] Router 和 Service 中没有 ORM 查询语句
+- [x] 能解释 Engine、连接池和 Session 的职责
+- [x] 能解释 `flush` 与 `commit` 的区别
+- [x] 能使用 AsyncSession 创建并查询一条会话
+- [x] 关闭应用后数据库连接能够正确释放
 
 ---
 
@@ -242,6 +242,7 @@ alembic downgrade -1
 
 - [ ] API 层没有 SQL 或 ORM 查询
 - [ ] Repository 层没有 FastAPI 依赖
+- [ ] Router 和 Service 中没有 ORM 查询语句
 - [ ] 普通数据库路径全部使用 AsyncSession
 - [ ] LLM 调用期间不占用数据库事务
 - [ ] 不存在会话能够稳定转换成 404
