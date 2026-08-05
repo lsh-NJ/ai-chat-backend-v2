@@ -1,5 +1,10 @@
 import os
+from pathlib import Path
+from sqlalchemy import text
+import asyncio
 from dotenv import load_dotenv
+from alembic import command
+from alembic.config import Config
 
 load_dotenv()
 
@@ -16,10 +21,18 @@ from app.db.base import Base  # noqa: E402
 from app.db.session import AsyncSessionFactory, engine  # noqa: E402
 
 
+def _upgrade_head() -> None:
+    # 绝对路径，不依赖“当前目录刚好是项目根目录”
+    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    cfg = Config(str(ini_path))
+    command.upgrade(cfg, "head")
+
+
 @pytest.fixture
 async def fresh_schema():
-    # 每个测试重建一次表结构，测试之间互不影响
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+        # 清空整库，模拟“空数据库”
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
+    await asyncio.to_thread(_upgrade_head)
     yield
