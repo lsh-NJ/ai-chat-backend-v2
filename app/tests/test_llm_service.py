@@ -1,0 +1,28 @@
+import httpx
+import pytest
+
+from app.core.exceptions import LLMConfigurationError
+from app.services import llm_service
+
+
+async def test_call_llm_missing_api_key_raises_configuration_error(monkeypatch):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(LLMConfigurationError):
+            await llm_service.call_llm(
+                client=client,
+                messages=[{"role": "user", "content": "你好"}],
+            )
+
+
+async def test_stream_llm_missing_api_key_raises_configuration_error(monkeypatch):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    async with httpx.AsyncClient() as client:
+        with pytest.raises(LLMConfigurationError):
+            async for _ in llm_service.stream_llm(
+                client=client,
+                messages=[{"role": "user", "content": "你好"}],
+            ):
+                pass

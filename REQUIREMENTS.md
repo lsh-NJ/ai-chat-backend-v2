@@ -18,6 +18,15 @@
   * 通过 `X-Conversation-Id` 返回会话 ID
   * 异常与上下文与`/chat`一致
 
+| 接口 | 行为 |
+| --- | --- |
+| `GET /health` | 200 |
+| `POST /conversations` | 创建会话，返回 id/title/created_at |
+| `GET /conversations` | 会话列表 |
+| `GET /conversations/{id}/messages` | 历史消息，按 id 升序；不存在返回 404 |
+| `POST /chat` | 无 conversation_id 自动建会话；自动标题取用户消息前 30 字；空消息 422；返回 reply + conversation_id |
+| `POST /chat/stream` | 同上，但流式返回；会话 ID 通过 `X-Conversation-Id` 头返回 |
+
 ## 业务记录
 - [ ] Chat 没有 conversation_id 时自动创建会话。
 - [ ] 自动标题取用户消息前 30 个字符。

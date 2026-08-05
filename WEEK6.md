@@ -164,17 +164,17 @@ index
 
 ### 任务
 
-- [ ] 初始化 Alembic
-- [ ] 让 Alembic 读取项目的 SQLAlchemy metadata
-- [ ] 让数据库 URL 来自环境变量
-- [ ] 生成第一条建表迁移
-- [ ] 人工检查自动生成的迁移内容
-- [ ] 从空数据库执行 `alembic upgrade head`
-- [ ] 执行一次 `alembic downgrade -1`
-- [ ] 再次执行 `alembic upgrade head`
-- [ ] 新增一个小字段或索引，生成第二条迁移
-- [ ] 验证迁移不会删除意外的表或数据
-- [ ] 在 README 中记录迁移命令
+- [x] 初始化 Alembic
+- [x] 让 Alembic 读取项目的 SQLAlchemy metadata
+- [x] 让数据库 URL 来自环境变量
+- [x] 生成第一条建表迁移
+- [x] 人工检查自动生成的迁移内容
+- [x] 从空数据库执行 `alembic upgrade head`
+- [x] 执行一次 `alembic downgrade -1`
+- [x] 再次执行 `alembic upgrade head`
+- [x] 新增一个小字段或索引，生成第二条迁移
+- [x] 验证迁移不会删除意外的表或数据
+- [x] 在 README 中记录迁移命令
 
 ### 必须掌握的命令
 
@@ -188,11 +188,11 @@ alembic downgrade -1
 
 ### Day 3 验收
 
-- [ ] 删除并重建空数据库后，迁移可以完整执行
-- [ ] downgrade 后表结构按预期回退
-- [ ] upgrade 后表结构恢复
-- [ ] 能解释为什么 `create_all()` 不能替代 Alembic
-- [ ] 能解释迁移文件为什么必须进入 Git
+- [x] 删除并重建空数据库后，迁移可以完整执行
+- [x] downgrade 后表结构按预期回退
+- [x] upgrade 后表结构恢复
+- [x] 能解释为什么 `create_all()` 不能替代 Alembic
+- [x] 能解释迁移文件为什么必须进入 Git
 
 ---
 
@@ -200,20 +200,20 @@ alembic downgrade -1
 
 ### 任务
 
-- [ ] 实现异步 `conversation_repository`
-- [ ] 实现异步 `message_repository`
-- [ ] Repository 接收 `AsyncSession`
-- [ ] Repository 不依赖 FastAPI、Request 或 HTTPException
-- [ ] Service 使用 `await` 调用 Repository
-- [ ] Router 只负责校验、依赖注入和 HTTP 响应
-- [ ] 重建创建会话接口
-- [ ] 重建会话列表接口
-- [ ] 重建历史消息接口
-- [ ] 重建普通聊天接口
-- [ ] 重建流式聊天接口
-- [ ] 保持原接口 URL、主要状态码和响应字段兼容
-- [ ] 删除普通数据库路径中的 `asyncio.to_thread()`
-- [ ] 明确聊天流程中的事务边界
+- [x] 实现异步 `conversation_repository`
+- [x] 实现异步 `message_repository`
+- [x] Repository 接收 `AsyncSession`
+- [x] Repository 不依赖 FastAPI、Request 或 HTTPException
+- [x] Service 使用 `await` 调用 Repository
+- [x] Router 只负责校验、依赖注入和 HTTP 响应
+- [x] 重建创建会话接口
+- [x] 重建会话列表接口
+- [x] 重建历史消息接口
+- [x] 重建普通聊天接口
+- [x] 重建流式聊天接口
+- [x] 保持原接口 URL、主要状态码和响应字段兼容
+- [x] 删除普通数据库路径中的 `asyncio.to_thread()`
+- [x] 明确聊天流程中的事务边界
 
 ### 推荐事务边界
 
@@ -240,13 +240,13 @@ alembic downgrade -1
 
 ### Day 4 验收
 
-- [ ] API 层没有 SQL 或 ORM 查询
-- [ ] Repository 层没有 FastAPI 依赖
-- [ ] Router 和 Service 中没有 ORM 查询语句
-- [ ] 普通数据库路径全部使用 AsyncSession
-- [ ] LLM 调用期间不占用数据库事务
-- [ ] 不存在会话能够稳定转换成 404
-- [ ] LLM 超时和上游错误仍能稳定转换为 HTTP 响应
+- [x] API 层没有 SQL 或 ORM 查询
+- [x] Repository 层没有 FastAPI 依赖
+- [x] Router 和 Service 中没有 ORM 查询语句
+- [x] 普通数据库路径全部使用 AsyncSession
+- [x] LLM 调用期间不占用数据库事务
+- [x] 不存在会话能够稳定转换成 404
+- [x] LLM 超时和上游错误仍能稳定转换为 HTTP 响应
 
 ---
 
@@ -254,10 +254,10 @@ alembic downgrade -1
 
 ### 任务
 
-- [ ] 测试使用独立 PostgreSQL 测试数据库
-- [ ] 每个测试之间数据库状态隔离
-- [ ] 禁止使用 SQLite 代替 PostgreSQL 集成测试
-- [ ] 普通和流式 LLM 全部使用 Mock
+- [x] 测试使用独立 PostgreSQL 测试数据库
+- [x] 每个测试之间数据库状态隔离
+- [x] 禁止使用 SQLite 代替 PostgreSQL 集成测试
+- [x] 普通和流式 LLM 全部使用 Mock
 - [ ] 增加迁移 smoke test
 - [ ] 增加外键约束测试
 - [ ] 增加事务回滚测试
