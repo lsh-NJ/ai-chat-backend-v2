@@ -5,7 +5,9 @@ from sqlalchemy import text
 
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
+from app.api.auth import router as auth_router
 from app.db.session import engine, close_db
+import app.models.user  # noqa: F401  注册 User 模型，避免运行期 Mapper 配置失败
 
 
 @asynccontextmanager
@@ -47,3 +49,4 @@ async def health() -> dict[str, str]:
 
 app.include_router(chat_router)
 app.include_router(conversations_router)
+app.include_router(auth_router)

@@ -6,6 +6,7 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 
 
+# 目标：flush 先拿到 id，commit 后数据持久化，新 session 能查回
 async def test_create_flush_commit_select(fresh_schema):
     async with AsyncSessionFactory() as session:
         conv = Conversation(title="Day2 测试")
@@ -32,6 +33,7 @@ async def test_create_flush_commit_select(fresh_schema):
         assert found.messages[0].content == "你好"
 
 
+# 目标：rollback 丢弃未提交的数据，新 session 查不到
 async def test_rollback_discards_uncommitted(fresh_schema):
     async with AsyncSessionFactory() as session:
         tmp = Conversation(title="待回滚")

@@ -12,6 +12,7 @@ from alembic import context
 from app.db.base import Base
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.user import User
 
 
 load_dotenv()
@@ -19,12 +20,6 @@ load_dotenv()
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-os.environ["POSTGRES_DB"] = os.environ["POSTGRES_TEST_DB"]
-
-if not os.environ["POSTGRES_DB"].endswith("_test"):
-    raise RuntimeError(
-        f"测试库名必须以 _test 结尾，当前是 {os.environ['POSTGRES_DB']}"
-    )
 
 url = (
     f"{os.environ["DRIVER"]}://{os.environ["POSTGRES_USER"]}:"

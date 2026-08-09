@@ -16,6 +16,7 @@ def _head_revision() -> str:
     return scripts.get_current_head()
 
 
+# 目标：空库 upgrade head 后，业务表全部存在
 async def test_empty_schema_upgrade_creates_all_tables(fresh_schema):
     async with engine.connect() as conn:
         rows = await conn.execute(
@@ -29,6 +30,7 @@ async def test_empty_schema_upgrade_creates_all_tables(fresh_schema):
     assert {"conversations", "messages", "alembic_version"} <= tables
 
 
+# 目标：迁移完成后 alembic_version 与代码最新版本一致
 async def test_alembic_version_is_at_head(fresh_schema):
     async with engine.connect() as conn:
         version = (

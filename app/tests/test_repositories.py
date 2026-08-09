@@ -8,6 +8,7 @@ from app.repositories import (
     message_repository
 )
 
+# 目标：conversation_repository.create 落库后，新 session 能查回
 async def test_conversation_create(fresh_schema):
     async with AsyncSessionFactory() as session:
         conversation = conversation_repository.ConversationRepository(session)
@@ -22,6 +23,7 @@ async def test_conversation_create(fresh_schema):
         assert result.scalar_one().title == "对话 1"
 
 
+# 目标：list_all 返回全部会话且顺序正确
 async def test_conversation_list_all(fresh_schema):
     async with AsyncSessionFactory() as session:
         conversation = conversation_repository.ConversationRepository(session)
@@ -35,6 +37,7 @@ async def test_conversation_list_all(fresh_schema):
         assert [c.title for c in result] == ["对话 1", "对话 2"]
 
 
+# 目标：按 id 能查到已创建的会话
 async def test_conversation_get_by_id(fresh_schema):
     async with AsyncSessionFactory() as session:
         conversation = conversation_repository.ConversationRepository(session)
@@ -50,12 +53,14 @@ async def test_conversation_get_by_id(fresh_schema):
         assert found.title == "查找我"
 
 
+# 目标：不存在的 id 返回 None（而不是抛异常）
 async def test_conversation_get_by_id_missing(fresh_schema):
     async with AsyncSessionFactory() as session:
         conversation = conversation_repository.ConversationRepository(session)
         assert await conversation.get_by_id(999999) is None
 
 
+# 目标：message_repository.add 落库后字段可查回
 async def test_message_add(fresh_schema):
     async with AsyncSessionFactory() as session:
         conversations = conversation_repository.ConversationRepository(session)
@@ -78,6 +83,7 @@ async def test_message_add(fresh_schema):
         assert found.content == "你好"
 
 
+# 目标：历史消息按 id 升序返回（先到先出）
 async def test_message_list_by_conversation_ordered(fresh_schema):
     async with AsyncSessionFactory() as session:
         conversations = conversation_repository.ConversationRepository(session)
@@ -99,6 +105,7 @@ async def test_message_list_by_conversation_ordered(fresh_schema):
         ]
 
 
+# 目标：limit 返回「最近的 N 条」（升序展示），而不是最早 N 条
 async def test_message_list_returns_recent_limit(fresh_schema):
     # 语义：limit 应返回“最近的 N 条”（按 id 升序展示），而不是最早 N 条
     async with AsyncSessionFactory() as session:

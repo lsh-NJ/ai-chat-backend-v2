@@ -6,6 +6,9 @@ from sqlalchemy import (
     DateTime, 
     Identity, 
     String,
+    ForeignKey,
+    CheckConstraint,
+    Index,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,14 +17,27 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.message import Message
+    from app.models.user import User
 
 class Conversation(Base):
     __tablename__ = "conversations"
+
+    __table_args__ = (
+        Index("idx_conversations_user_id_created_at",
+            "user_id", "created_at"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         BigInteger,
         Identity(always=True),
         primary_key=True,
+    )
+
+    user_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_conversations_user_id_users"),
+        nullable=True,
     )
 
     title: Mapped[str | None] = mapped_column(
@@ -40,4 +56,8 @@ class Conversation(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="Message.id",
+    )
+
+    user: Mapped["User"] = relationship (
+        back_populates="conversations"
     )

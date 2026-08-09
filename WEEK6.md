@@ -268,7 +268,7 @@ alembic downgrade -1
 - [x] 测试数量不少于 12 个
 - [x] 更新 README 的启动、迁移和测试命令
 - [x] 检查 Git diff 和密钥
-- [ ] 创建清晰的 Week 6 提交
+- [x] 创建清晰的 Week 6 提交
 
 ### 最终命令验收
 

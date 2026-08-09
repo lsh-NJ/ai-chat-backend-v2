@@ -8,3 +8,6 @@ python-dotenv
 pydantic
 fastapi
 httpx
+bcrypt
+pyjwt
+python-multipart

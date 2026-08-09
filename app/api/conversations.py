@@ -9,7 +9,7 @@ from app.services import conversation_service
 
 router = APIRouter(tags=["conversations"])
 
-
+# 创建 conversation
 @router.post("/conversations", response_model=ConversationOut)
 async def create_conversation(
     body: ConversationCreateRequest,
@@ -22,6 +22,7 @@ async def create_conversation(
     return ConversationOut.model_validate(conversation)
 
 
+# 获得所有 conversation
 @router.get("/conversations", response_model=list[ConversationOut])
 async def list_conversations(
     session: AsyncSession = Depends(get_db),
@@ -30,6 +31,7 @@ async def list_conversations(
     return [ConversationOut.model_validate(conversation) for conversation in conversations]
 
 
+# 获得相应 conversation_id 的 conversation
 @router.get(
     "/conversations/{conversation_id}/messages",
     response_model=list[MessageOut],

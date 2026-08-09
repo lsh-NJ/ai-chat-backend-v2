@@ -7,13 +7,13 @@ from alembic import command
 from alembic.config import Config
 
 load_dotenv()
-
 os.environ["POSTGRES_DB"] = os.environ["POSTGRES_TEST_DB"]
 
 if not os.environ["POSTGRES_DB"].endswith("_test"):
     raise RuntimeError(
         f"测试库名必须以 _test 结尾，当前是 {os.environ['POSTGRES_DB']}"
     )
+
 
 import pytest  # noqa: E402
 

@@ -1,3 +1,4 @@
+from sqlalchemy.exc import IntegrityError
 
 # 所有 LLM 错误的基类
 class LLMServiceError(Exception):
@@ -21,3 +22,11 @@ class LLMResponseFormatError(LLMServiceError):
 # 对话错误：
 class ConversationNotFoundError(Exception):
     pass
+
+
+# 密码与身份认证错误：
+class UsernameAlreadyExistsError(Exception):
+    """账户已存在"""
+
+class UsernameOrPasswordError(Exception):
+    """用户名或密码错误"""

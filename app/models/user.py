@@ -1,35 +1,26 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
-
 from sqlalchemy import (
     BigInteger,
-    CheckConstraint,
     DateTime,
-    ForeignKey,
     Identity,
-    Index,
     String,
-    Text,
+    CheckConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
 if TYPE_CHECKING:
     from app.models.conversation import Conversation
 
-
-class Message(Base):
-    __tablename__ = "messages"
+class User(Base):
+    __tablename__ = "users"
 
     __table_args__ = (
         CheckConstraint(
-            "role IN ('user', 'assistant', 'system')",
-            name="ck_messages_role",
-        ),
-        Index("idx_messages_conversation_id_id",
-            "conversation_id", "id"
+            "role IN ('user', 'admin')",
+            name="ck_users_role",
         ),
     )
 
@@ -39,21 +30,22 @@ class Message(Base):
         primary_key=True,
     )
 
-    conversation_id: Mapped[int] = mapped_column(
-        BigInteger,
-        ForeignKey("conversations.id", ondelete="CASCADE"),
+    username: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        unique=True,
+    )
+
+    password_hash: Mapped[str] = mapped_column(
+        String(128),
         nullable=False,
     )
 
     role: Mapped[str] = mapped_column(
-        String(32),
+        String(16),
         nullable=False,
-        index=True,
-    )
-
-    content: Mapped[str] = mapped_column(
-        Text,
-        nullable=False,
+        default="user",
+        server_default="user",
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -62,6 +54,9 @@ class Message(Base):
         server_default=func.now(),
     )
 
-    conversation: Mapped["Conversation"] = relationship(
-        back_populates="messages",
+    conversations: Mapped[list["Conversation"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="Conversation.created_at",
     )

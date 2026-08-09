@@ -39,6 +39,7 @@ async def _messages_of(session, conversation_id: int) -> list[Message]:
     return list(result.scalars().all())
 
 
+# /chat 传入不存在的会话 → 404，且不应触发 LLM 调用
 async def test_chat_nonexistent_conversation_returns_404(client, monkeypatch):
     async def fake_call_llm(client, messages):
         raise AssertionError("不存在的会话不应该走到 LLM 调用")
@@ -54,6 +55,7 @@ async def test_chat_nonexistent_conversation_returns_404(client, monkeypatch):
     assert "999999" in response.json()["detail"]
 
 
+# 历史消息接口查询不存在的会话 → 404
 async def test_history_missing_conversation_returns_404(client):
     response = await client.get("/conversations/999999/messages")
 
@@ -61,6 +63,7 @@ async def test_history_missing_conversation_returns_404(client):
     assert "999999" in response.json()["detail"]
 
 
+# LLM 超时 → 504
 async def test_chat_llm_timeout_returns_504(client, monkeypatch):
     async def fake_timeout(client, messages):
         raise LLMTimeoutError("LLM request timeout")
@@ -73,6 +76,7 @@ async def test_chat_llm_timeout_returns_504(client, monkeypatch):
     assert "timeout" in response.json()["detail"].lower()
 
 
+# LLM 上游错误 → 502
 async def test_chat_llm_upstream_error_returns_502(client, monkeypatch):
     async def fake_upstream(client, messages):
         raise LLMUpstreamError("LLM API returned status 500")
@@ -85,6 +89,7 @@ async def test_chat_llm_upstream_error_returns_502(client, monkeypatch):
     assert "status 500" in response.json()["detail"]
 
 
+# LLM 配置缺失 → 500，detail 中带出缺失的配置项
 async def test_chat_llm_configuration_error_returns_500(client, monkeypatch):
     async def fake_config(client, messages):
         raise LLMConfigurationError("缺少 LLM 配置环境变量: DEEPSEEK_API_KEY")
@@ -97,6 +102,7 @@ async def test_chat_llm_configuration_error_returns_500(client, monkeypatch):
     assert "DEEPSEEK_API_KEY" in response.json()["detail"]
 
 
+# 正常对话返回 reply + conversation_id，且会话与两条消息真实落库
 async def test_chat_success_returns_reply_and_persists_messages(client, monkeypatch):
     async def fake_call_llm(client, messages):
         assert messages[-1] == {"role": "user", "content": "你好"}
@@ -124,6 +130,7 @@ async def test_chat_success_returns_reply_and_persists_messages(client, monkeypa
         ]
 
 
+# 流式对话完整返回文本 + X-Conversation-Id 头，结束后完整回复落库
 async def test_chat_stream_success_returns_full_response(client, monkeypatch):
     async def fake_stream(client, messages):
         yield "你好"

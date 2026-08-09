@@ -5,6 +5,7 @@ from app.core.exceptions import LLMConfigurationError
 from app.services import llm_service
 
 
+# 目标：缺少 API Key 时，普通调用抛 LLMConfigurationError
 async def test_call_llm_missing_api_key_raises_configuration_error(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
@@ -16,6 +17,7 @@ async def test_call_llm_missing_api_key_raises_configuration_error(monkeypatch):
             )
 
 
+# 目标：缺少 API Key 时，流式调用抛 LLMConfigurationError
 async def test_stream_llm_missing_api_key_raises_configuration_error(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 

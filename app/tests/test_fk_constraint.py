@@ -7,6 +7,7 @@ from app.models.message import Message
 from app.repositories.message_repository import MessageRepository
 
 
+# 目标：外键约束拒绝孤儿消息；失败事务回滚后不留脏数据
 async def test_message_fk_violation_is_rejected(fresh_schema):
     async with AsyncSessionFactory() as session:
         messages = MessageRepository(session)
