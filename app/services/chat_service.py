@@ -49,16 +49,21 @@ async def chat(
     session: AsyncSession,
     conversation_id: int | None,
     message: str,
+    user_id: int,
 ) -> ChatResponse:
     if conversation_id is None:
         con = await create_conversation(
             session,
             message[:30],
+            user_id,
         )
         conversation_id = con.id
 
     if conversation_id is not None:
-        conversation = await ConversationRepository(session).get_by_id(conversation_id)
+        conversation = await ConversationRepository(session).get_by_id_for_user(
+            conversation_id,
+            user_id,
+        )
         if conversation is None:
             raise ConversationNotFoundError(conversation_id)
 
@@ -98,16 +103,21 @@ async def chat_stream(
     session: AsyncSession,
     conversation_id: int | None,
     message: str,
+    user_id: int,
 ):
     if conversation_id is None:
         con = await create_conversation(
             session,
             message[:30],
+            user_id,
         )
         conversation_id = con.id
 
     if conversation_id is not None:
-        conversation = await ConversationRepository(session).get_by_id(conversation_id)
+        conversation = await ConversationRepository(session).get_by_id_for_user(
+            conversation_id,
+            user_id,
+        )
         if conversation is None:
             raise ConversationNotFoundError(conversation_id)
 

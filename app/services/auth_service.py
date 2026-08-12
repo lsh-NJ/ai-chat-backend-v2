@@ -43,7 +43,7 @@ async def login(
     password: str,
 ) -> User:
     user_repository = UserRepository(session)
-    user: User = await user_repository.get_by_username(username)
+    user: User | None = await user_repository.get_by_username(username)
 
     if user is None:
         raise UsernameOrPasswordError()

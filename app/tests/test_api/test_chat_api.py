@@ -7,27 +7,10 @@ from app.core.exceptions import (
     LLMTimeoutError,
     LLMUpstreamError,
 )
-from app.db.session import AsyncSessionFactory, get_db
-from app.main import app
+from app.db.session import AsyncSessionFactory
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.services import chat_service
-
-
-@pytest.fixture
-async def client(fresh_schema):
-    async def override_get_db():
-        async with AsyncSessionFactory() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = override_get_db
-    async with app.router.lifespan_context(app):
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://testserver",
-        ) as test_client:
-            yield test_client
-    app.dependency_overrides.clear()
 
 
 async def _messages_of(session, conversation_id: int) -> list[Message]:
@@ -40,7 +23,11 @@ async def _messages_of(session, conversation_id: int) -> list[Message]:
 
 
 # /chat 传入不存在的会话 → 404，且不应触发 LLM 调用
-async def test_chat_nonexistent_conversation_returns_404(client, monkeypatch):
+async def test_chat_nonexistent_conversation_returns_404(
+    client,
+    auth_headers,
+    monkeypatch,
+):
     async def fake_call_llm(client, messages):
         raise AssertionError("不存在的会话不应该走到 LLM 调用")
 
@@ -49,6 +36,7 @@ async def test_chat_nonexistent_conversation_returns_404(client, monkeypatch):
     response = await client.post(
         "/chat",
         json={"conversation_id": 999999, "message": "你好"},
+        headers=auth_headers,
     )
 
     assert response.status_code == 404
@@ -56,61 +44,88 @@ async def test_chat_nonexistent_conversation_returns_404(client, monkeypatch):
 
 
 # 历史消息接口查询不存在的会话 → 404
-async def test_history_missing_conversation_returns_404(client):
-    response = await client.get("/conversations/999999/messages")
+async def test_history_missing_conversation_returns_404(client, auth_headers):
+    response = await client.get(
+        "/conversations/999999/messages",
+        headers=auth_headers,
+    )
 
     assert response.status_code == 404
     assert "999999" in response.json()["detail"]
 
 
 # LLM 超时 → 504
-async def test_chat_llm_timeout_returns_504(client, monkeypatch):
+async def test_chat_llm_timeout_returns_504(client, auth_headers, monkeypatch):
     async def fake_timeout(client, messages):
         raise LLMTimeoutError("LLM request timeout")
 
     monkeypatch.setattr(chat_service, "call_llm", fake_timeout)
 
-    response = await client.post("/chat", json={"message": "你好"})
+    response = await client.post(
+        "/chat",
+        json={"message": "你好"},
+        headers=auth_headers,
+    )
 
     assert response.status_code == 504
     assert "timeout" in response.json()["detail"].lower()
 
 
 # LLM 上游错误 → 502
-async def test_chat_llm_upstream_error_returns_502(client, monkeypatch):
+async def test_chat_llm_upstream_error_returns_502(client, auth_headers, monkeypatch):
     async def fake_upstream(client, messages):
         raise LLMUpstreamError("LLM API returned status 500")
 
     monkeypatch.setattr(chat_service, "call_llm", fake_upstream)
 
-    response = await client.post("/chat", json={"message": "你好"})
+    response = await client.post(
+        "/chat",
+        json={"message": "你好"},
+        headers=auth_headers,
+    )
 
     assert response.status_code == 502
     assert "status 500" in response.json()["detail"]
 
 
 # LLM 配置缺失 → 500，detail 中带出缺失的配置项
-async def test_chat_llm_configuration_error_returns_500(client, monkeypatch):
+async def test_chat_llm_configuration_error_returns_500(
+    client,
+    auth_headers,
+    monkeypatch,
+):
     async def fake_config(client, messages):
         raise LLMConfigurationError("缺少 LLM 配置环境变量: DEEPSEEK_API_KEY")
 
     monkeypatch.setattr(chat_service, "call_llm", fake_config)
 
-    response = await client.post("/chat", json={"message": "你好"})
+    response = await client.post(
+        "/chat",
+        json={"message": "你好"},
+        headers=auth_headers,
+    )
 
     assert response.status_code == 500
     assert "DEEPSEEK_API_KEY" in response.json()["detail"]
 
 
 # 正常对话返回 reply + conversation_id，且会话与两条消息真实落库
-async def test_chat_success_returns_reply_and_persists_messages(client, monkeypatch):
+async def test_chat_success_returns_reply_and_persists_messages(
+    client,
+    auth_headers,
+    monkeypatch,
+):
     async def fake_call_llm(client, messages):
         assert messages[-1] == {"role": "user", "content": "你好"}
         return "你好，我是模拟模型。"
 
     monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
 
-    response = await client.post("/chat", json={"message": "你好"})
+    response = await client.post(
+        "/chat",
+        json={"message": "你好"},
+        headers=auth_headers,
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -131,14 +146,22 @@ async def test_chat_success_returns_reply_and_persists_messages(client, monkeypa
 
 
 # 流式对话完整返回文本 + X-Conversation-Id 头，结束后完整回复落库
-async def test_chat_stream_success_returns_full_response(client, monkeypatch):
+async def test_chat_stream_success_returns_full_response(
+    client,
+    auth_headers,
+    monkeypatch,
+):
     async def fake_stream(client, messages):
         yield "你好"
         yield "，世界。"
 
     monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
 
-    response = await client.post("/chat/stream", json={"message": "你好"})
+    response = await client.post(
+        "/chat/stream",
+        json={"message": "你好"},
+        headers=auth_headers,
+    )
 
     assert response.status_code == 200
     assert response.headers["X-Conversation-Id"]

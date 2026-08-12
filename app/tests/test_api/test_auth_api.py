@@ -8,26 +8,10 @@ from app.models.user import User
 from app.core.security import verify_password
 
 
-@pytest.fixture
-async def client(fresh_schema):
-    async def override_get_db():
-        async with AsyncSessionFactory() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = override_get_db
-    async with app.router.lifespan_context(app):
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://testserver",
-        ) as test_client:
-            yield test_client
-    app.dependency_overrides.clear()
-
-
 # 测试注册
 async def test_register(client):
     register_response: httpx.Response = await client.post(
-        "/register",
+        "/auth/register",
         json={
             "username": "111",
             "password": "88888888"
@@ -44,7 +28,9 @@ async def test_register(client):
 
     async with AsyncSessionFactory() as session:
         user_response = await session.execute(select(User).where(User.id == user_id))
-        user = user_response.scalar_one_or_none()
+        user: User | None = user_response.scalar_one_or_none()
+
+        assert user is not None
         assert user.id == user_id
         assert user.username == "111"
         # 库里存的必须是 bcrypt 哈希，不是明文
@@ -55,7 +41,7 @@ async def test_register(client):
 # 测试登录
 async def test_login(client):
     register_response: httpx.Response = await client.post(
-        "/register",
+        "/auth/register",
         json={
             "username": "222",
             "password": "88888888"
@@ -64,7 +50,7 @@ async def test_login(client):
     assert register_response.status_code == 201
 
     login_response: httpx.Response = await client.post(
-        "/login",
+        "/auth/login",
         data={
             "username": "222",
             "password": "88888888"
@@ -80,7 +66,7 @@ async def test_login(client):
 # 测试登录失败（密码错误）
 async def test_login_wrong_password(client):
     register_response: httpx.Response = await client.post(
-        "/register",
+        "/auth/register",
         json={
             "username": "333",
             "password": "88888888"
@@ -89,7 +75,7 @@ async def test_login_wrong_password(client):
     assert register_response.status_code == 201
 
     login_response: httpx.Response = await client.post(
-        "/login",
+        "/auth/login",
         data={
             "username": "333",
             "password": "wrong-pass"
@@ -101,7 +87,7 @@ async def test_login_wrong_password(client):
 
 async def test_register_weak_password(client):
     register_response: httpx.Response = await client.post(
-        "/register",
+        "/auth/register",
         json={
             "username": "444",
             "password": "123",      # 少于 8 位
@@ -120,10 +106,10 @@ async def test_register_duplicate_username(client):
         "password": "88888888",
     }
 
-    first_response: httpx.Response = await client.post("/register", json=payload)
+    first_response: httpx.Response = await client.post("/auth/register", json=payload)
     assert first_response.status_code == 201
 
-    second_response: httpx.Response = await client.post("/register", json=payload)
+    second_response: httpx.Response = await client.post("/auth/register", json=payload)
     assert second_response.status_code == 409
     body = second_response.json()
     assert body["detail"]

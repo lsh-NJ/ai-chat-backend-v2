@@ -34,10 +34,10 @@ class Conversation(Base):
         primary_key=True,
     )
 
-    user_id: Mapped[int | None] = mapped_column(
+    user_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("users.id", ondelete="CASCADE", name="fk_conversations_user_id_users"),
-        nullable=True,
+        nullable=False,
     )
 
     title: Mapped[str | None] = mapped_column(

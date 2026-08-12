@@ -32,7 +32,7 @@ async def _messages_of(session, conversation_id: int) -> list[Message]:
 
 # 目标：chat 无会话时自动创建会话，并保存 user + assistant 两条消息
 async def test_chat_creates_conversation_and_saves_messages(
-    fresh_schema, monkeypatch,
+    fresh_schema, test_user_id, monkeypatch,
 ):
     async def fake_call_llm(client, messages):
         assert messages[-1] == {"role": "user", "content": "你好"}
@@ -47,6 +47,7 @@ async def test_chat_creates_conversation_and_saves_messages(
                 session=session,
                 conversation_id=None,
                 message="你好",
+                user_id=test_user_id,
             )
 
     assert result.reply == "你好，我是模拟模型。"
@@ -55,6 +56,7 @@ async def test_chat_creates_conversation_and_saves_messages(
         conversation = await session.get(Conversation, result.conversation_id)
         assert conversation is not None
         assert conversation.title == "你好"
+        assert conversation.user_id == test_user_id
 
         messages = await _messages_of(session, result.conversation_id)
         assert [(m.role, m.content) for m in messages] == [
@@ -64,7 +66,11 @@ async def test_chat_creates_conversation_and_saves_messages(
 
 
 # 目标：自动标题取用户消息前 30 个字
-async def test_chat_title_uses_first_30_chars(fresh_schema, monkeypatch):
+async def test_chat_title_uses_first_30_chars(
+    fresh_schema,
+    test_user_id,
+    monkeypatch,
+):
     async def fake_call_llm(client, messages):
         return "回复"
 
@@ -77,6 +83,7 @@ async def test_chat_title_uses_first_30_chars(fresh_schema, monkeypatch):
                 session=session,
                 conversation_id=None,
                 message=LONG_MESSAGE,
+                user_id=test_user_id,
             )
 
     async with AsyncSessionFactory() as session:
@@ -86,14 +93,21 @@ async def test_chat_title_uses_first_30_chars(fresh_schema, monkeypatch):
 
 
 # 目标：传入已有会话时不新建，消息追加到该会话
-async def test_chat_uses_existing_conversation(fresh_schema, monkeypatch):
+async def test_chat_uses_existing_conversation(
+    fresh_schema,
+    test_user_id,
+    monkeypatch,
+):
     async def fake_call_llm(client, messages):
         return "回复"
 
     monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
 
     async with AsyncSessionFactory() as session:
-        conversation = await ConversationRepository(session).create("已有会话")
+        conversation = await ConversationRepository(session).create(
+            "已有会话",
+            test_user_id,
+        )
         await session.commit()
         conversation_id = conversation.id
 
@@ -104,6 +118,7 @@ async def test_chat_uses_existing_conversation(fresh_schema, monkeypatch):
                 session=session,
                 conversation_id=conversation_id,
                 message="继续聊",
+                user_id=test_user_id,
             )
 
     assert result.conversation_id == conversation_id
@@ -119,7 +134,7 @@ async def test_chat_uses_existing_conversation(fresh_schema, monkeypatch):
 
 # 目标：不存在的会话抛 ConversationNotFoundError，且不调用 LLM
 async def test_chat_nonexistent_conversation_raises_not_found(
-    fresh_schema, monkeypatch,
+    fresh_schema, test_user_id, monkeypatch,
 ):
     async def fake_call_llm(client, messages):
         raise AssertionError("不存在的会话不应该走到 LLM 调用")
@@ -134,12 +149,13 @@ async def test_chat_nonexistent_conversation_raises_not_found(
                     session=session,
                     conversation_id=999999,
                     message="你好",
+                    user_id=test_user_id,
                 )
 
 
 # 目标：LLM 超时抛错，但短事务 1 已提交（会话 + user 消息保留，assistant 不落库）
 async def test_chat_llm_timeout_keeps_user_message_committed(
-    fresh_schema, monkeypatch,
+    fresh_schema, test_user_id, monkeypatch,
 ):
     async def fake_timeout(client, messages):
         raise LLMTimeoutError("LLM request timeout")
@@ -154,6 +170,7 @@ async def test_chat_llm_timeout_keeps_user_message_committed(
                     session=session,
                     conversation_id=None,
                     message="你好",
+                    user_id=test_user_id,
                 )
 
     # 短事务 1 必须已提交：会话和 user 消息在，assistant 消息不落库
@@ -165,7 +182,11 @@ async def test_chat_llm_timeout_keeps_user_message_committed(
 
 
 # 目标：流式结束后完整回复落库
-async def test_chat_stream_saves_full_reply(fresh_schema, monkeypatch):
+async def test_chat_stream_saves_full_reply(
+    fresh_schema,
+    test_user_id,
+    monkeypatch,
+):
     async def fake_stream(client, messages):
         yield "你好"
         yield "，世界。"
@@ -179,6 +200,7 @@ async def test_chat_stream_saves_full_reply(fresh_schema, monkeypatch):
                 session=session,
                 conversation_id=None,
                 message="你好",
+                user_id=test_user_id,
             )
 
             reply_parts = [chunk async for chunk in chunks]

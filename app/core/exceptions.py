@@ -30,3 +30,6 @@ class UsernameAlreadyExistsError(Exception):
 
 class UsernameOrPasswordError(Exception):
     """用户名或密码错误"""
+
+class InvalidTokenError(Exception):
+    pass

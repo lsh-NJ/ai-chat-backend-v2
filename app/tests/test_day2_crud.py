@@ -7,9 +7,9 @@ from app.models.message import Message
 
 
 # 目标：flush 先拿到 id，commit 后数据持久化，新 session 能查回
-async def test_create_flush_commit_select(fresh_schema):
+async def test_create_flush_commit_select(fresh_schema, test_user_id):
     async with AsyncSessionFactory() as session:
-        conv = Conversation(title="Day2 测试")
+        conv = Conversation(title="Day2 测试", user_id=test_user_id)
         session.add(conv)
         await session.flush()
         assert conv.id is not None
@@ -34,9 +34,9 @@ async def test_create_flush_commit_select(fresh_schema):
 
 
 # 目标：rollback 丢弃未提交的数据，新 session 查不到
-async def test_rollback_discards_uncommitted(fresh_schema):
+async def test_rollback_discards_uncommitted(fresh_schema, test_user_id):
     async with AsyncSessionFactory() as session:
-        tmp = Conversation(title="待回滚")
+        tmp = Conversation(title="待回滚", user_id=test_user_id)
         session.add(tmp)
         await session.flush()
         assert await session.get(Conversation, tmp.id) is not None

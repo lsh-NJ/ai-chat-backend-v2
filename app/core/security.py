@@ -1,9 +1,10 @@
 import os
 from dotenv import load_dotenv
-import asyncio
 import bcrypt
 from datetime import datetime, timezone, timedelta
 import jwt
+
+from app.core.exceptions import InvalidTokenError
 
 load_dotenv()
 JWT_SECRET = os.environ["JWT_SECRET"]
@@ -26,9 +27,27 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 # 创建身份凭证 token
-def create_access_token(user_id: int) -> str:
+def create_access_token(user_id: int, time_: int = 30) -> str:
     payload = {
         "sub": str(user_id),
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=30),
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=time_),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+# 验证身份凭证 token
+def decode_access_token(token: str) -> int:
+    try:
+        pyload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=["HS256"],
+            options={"require": ["sub", "exp"]}
+        )
+        return int(pyload["sub"])
+
+    except jwt.ExpiredSignatureError as e:
+        raise InvalidTokenError("认证超时") from e
+
+    except (jwt.InvalidTokenError, ValueError, TypeError) as e:
+        raise InvalidTokenError("非法认证") from e

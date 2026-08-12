@@ -16,7 +16,7 @@ from app.core.exceptions import (
 )
 from app.core.security import create_access_token
 
-router = APIRouter(tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenOut)
 async def login(

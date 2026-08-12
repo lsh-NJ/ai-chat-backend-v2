@@ -17,8 +17,8 @@
   * 参数 ChatRequest
   * 通过 `X-Conversation-Id` 返回会话 ID
   * 异常与上下文与`/chat`一致
-- [ ] `/auth/register`
-- [ ] `/auth/login`
+- [x] `POST /auth/register`
+- [x] `POST /auth/login`
 
 | 接口 | 行为 |
 | --- | --- |

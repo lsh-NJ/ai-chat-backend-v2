@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.deps import get_current_user
 from app.db.session import get_db
+from app.models.user import User
 from app.services import chat_service
 from app.schemas.chat import (
     ChatResponse,
@@ -40,7 +42,8 @@ def to_http_exception(e: LLMServiceError) -> HTTPException:
 async def chat(
     chat_request: ChatRequest,
     request: Request,
-    session: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
     try:
         chat_model = await chat_service.chat(
@@ -48,6 +51,7 @@ async def chat(
             conversation_id=chat_request.conversation_id,
             message=chat_request.message,
             client=request.app.state.http_client,
+            user_id=current_user.id,
         )
 
     except ConversationNotFoundError as e:
@@ -69,6 +73,7 @@ async def chat(
 async def chat_stream(
     chat_request: ChatRequest,
     request: Request,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
     try:
@@ -77,6 +82,7 @@ async def chat_stream(
             message=chat_request.message,
             client=request.app.state.http_client,
             session=session,
+            user_id=current_user.id,
         )
 
     except ConversationNotFoundError as exc:
