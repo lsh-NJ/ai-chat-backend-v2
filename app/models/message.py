@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy import (
     Boolean,
@@ -11,6 +12,8 @@ from sqlalchemy import (
     Index,
     String,
     Text,
+    UniqueConstraint,
+    Uuid,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -31,6 +34,10 @@ class Message(Base):
         ),
         Index("idx_messages_conversation_id_id",
             "conversation_id", "id"
+        ),
+        UniqueConstraint(
+            "idempotency_key",
+            name="uq_messages_idempotency_key",
         ),
     )
 
@@ -67,6 +74,12 @@ class Message(Base):
         Boolean,
         nullable=False,
     )
+
+    idempotency_key: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        nullable=True,
+    )
+
     conversation: Mapped["Conversation"] = relationship(
         back_populates="messages",
     )
