@@ -23,7 +23,7 @@ API 流式输出
 
 - [x] 定义版本化的重试任务契约，任务不包含密码、token 等认证秘密
 - [x] 给 assistant 消息增加数据库级幂等键，重复消费不会重复落库
-- [ ] 用 Redis Stream 投递失败任务，并限制 Stream 长度
+- [x] 用 Redis Stream 投递失败任务，并限制 Stream 长度
 - [ ] 独立 Worker 使用 Consumer Group 消费，数据库 commit 成功后才 ACK
 - [ ] Worker 崩溃后能认领 pending 消息并继续处理
 - [ ] 超过最大重试次数的任务进入 dead-letter stream
@@ -119,12 +119,12 @@ load_tests/
 
 ### 任务
 
-- [ ] 定义固定 Stream key、dead-letter key 和 Consumer Group 名称
-- [ ] 用 `XADD` 入队，任务带 schema version
-- [ ] 使用 `MAXLEN` 限制队列长度，避免无限占用内存
-- [ ] 实现任务序列化与反序列化；格式错误不能进入数据库写路径
-- [ ] Consumer Group 创建过程可重复执行，不因 group 已存在而失败
-- [ ] 使用真实 Redis DB 15 测试入队、读取、长度限制和用户隔离信息
+- [x] 定义固定 Stream key、dead-letter key 和 Consumer Group 名称
+- [x] 用 `XADD` 入队，任务带 schema version
+- [x] 使用 `MAXLEN` 限制队列长度，避免无限占用内存
+- [x] 实现任务序列化与反序列化；格式错误不能进入数据库写路径
+- [x] Consumer Group 创建过程可重复执行，不因 group 已存在而失败
+- [x] 使用真实 Redis DB 15 测试入队、读取、长度限制和用户隔离信息
 
 ### 只补这些知识
 
@@ -135,10 +135,10 @@ load_tests/
 
 ### Day 2 验收
 
-- [ ] 入队后能从 Consumer Group 读取并还原为 `MessageRetryJob`
-- [ ] 重复创建 group 不报错
-- [ ] 队列日志不包含 content
-- [ ] Redis 测试环境错误时测试失败而不是跳过
+- [x] 入队后能从 Consumer Group 读取并还原为 `MessageRetryJob`
+- [x] 重复创建 group 不报错
+- [x] 队列日志不包含 content
+- [x] Redis 测试环境错误时测试失败而不是跳过
 
 ---
 
