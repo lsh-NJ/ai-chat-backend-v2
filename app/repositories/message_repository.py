@@ -50,7 +50,7 @@ class MessageRepository:
         is_complete: bool,
         idempotency_key: UUID,
     ) -> Message:
-        """Insert once per idempotency key and return the stored message."""
+        """使用 idempotency_key 写入消息，保证同一个业务操作重复执行时，数据库只产生一条消息"""
         statement = (
             insert(Message)
             .values(

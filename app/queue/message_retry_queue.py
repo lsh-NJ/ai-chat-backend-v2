@@ -3,24 +3,23 @@
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
 
+from app.core.types import RedisDecodedFields, RedisFields
 from app.schemas.retry_job import MessageRetryJob
-
-
-RedisScalar = bytes | bytearray | memoryview | str | int | float
 
 
 RETRY_STREAM_KEY = "message-retry:v1"
 DEAD_LETTER_STREAM_KEY = "message-retry:dead-letter:v1"
 CONSUMER_GROUP_NAME = "message-retry-workers:v1"
 STREAM_MAX_LENGTH = 10_000
+DEAD_LETTER_STREAM_MAX_LENGTH = 10_000
 
 
-def serialize_retry_job(job: MessageRetryJob) -> dict[RedisScalar, RedisScalar]:
+def serialize_retry_job(job: MessageRetryJob) -> RedisFields:
     """把 Pydantic 对象转换成 Redis XADD 能接受的字段"""
     return {"payload": job.model_dump_json()}
 
 
-def deserialize_retry_job(fields: dict[str, str]) -> MessageRetryJob:
+def deserialize_retry_job(fields: RedisDecodedFields) -> MessageRetryJob:
     """把 Redis 读取出来的字段恢复成 MessageRetryJob"""
     payload = fields.get("payload")
     if payload is None:

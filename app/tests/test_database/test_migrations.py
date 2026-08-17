@@ -9,8 +9,8 @@ from sqlalchemy import text
 from app.db.session import engine
 
 def _alembic_config() -> Config:
-    # app/tests/test_migrations.py 的 parents[2] 是项目根目录
-    ini_path = Path(__file__).resolve().parents[2] / "alembic.ini"
+    # app/tests/test_database/test_migrations.py 的 parents[3] 是项目根目录
+    ini_path = Path(__file__).resolve().parents[3] / "alembic.ini"
     return Config(str(ini_path))
 
 

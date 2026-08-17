@@ -147,12 +147,12 @@ load_tests/
 ### 任务
 
 - [ ] 将“处理一条任务”和“持续轮询”拆开，核心逻辑可直接测试
-- [ ] Worker 为每条任务创建独立 AsyncSession
-- [ ] 幂等保存并 commit 成功后执行 `XACK`
-- [ ] 数据库失败时不 ACK，让任务保留在 pending
-- [ ] 使用 `XAUTOCLAIM` 认领超时 pending 任务，处理 Worker 崩溃场景
-- [ ] attempt 超过上限后写入 dead-letter stream，再 ACK 原任务
-- [ ] 日志包含 job_id、attempt、状态与 error_type，不含正文和异常原文
+- [x] Worker 为每条任务创建独立 AsyncSession
+- [x] 幂等保存并 commit 成功后执行 `XACK`
+- [x] 数据库失败时不 ACK，让任务保留在 pending
+- [x] 使用 `XAUTOCLAIM` 认领超时 pending 任务，处理 Worker 崩溃场景
+- [x] attempt 超过上限后写入 dead-letter stream，再 ACK 原任务
+- [x] 日志包含 job_id、attempt、状态与 error_type，不含正文和异常原文
 
 ### 必须亲手写
 
@@ -163,11 +163,11 @@ load_tests/
 
 ### Day 3 验收
 
-- [ ] commit 成功才 ACK
-- [ ] commit 失败时 entry 留在 pending
-- [ ] 同一任务重复处理不会重复插入消息
-- [ ] 崩溃后另一个 consumer 能认领并完成任务
-- [ ] 超限任务进入 dead-letter stream
+- [x] commit 成功才 ACK
+- [x] commit 失败时 entry 留在 pending
+- [x] 同一任务重复处理不会重复插入消息
+- [x] 崩溃后另一个 consumer 能认领并完成任务
+- [x] 超限任务进入 dead-letter stream
 
 ---
 
