@@ -1,13 +1,30 @@
 import os
-from dotenv import load_dotenv
-import bcrypt
 from datetime import datetime, timezone, timedelta
+
+import bcrypt
 import jwt
+from dotenv import load_dotenv
 
 from app.core.exceptions import InvalidTokenError
 
+
+def validate_jwt_secret(value: str | None) -> str:
+    """校验 JWT 签名密钥；不安全配置必须阻止应用启动。"""
+    if value is None or not value.strip():
+        raise RuntimeError("JWT_SECRET 未配置，拒绝启动")
+
+    secret = value.strip()
+    if secret == "replace_me":
+        raise RuntimeError("JWT_SECRET 仍是示例值，拒绝启动")
+
+    if len(secret) < 32:
+        raise RuntimeError("JWT_SECRET 长度必须至少为 32 个字符")
+
+    return secret
+
+
 load_dotenv()
-JWT_SECRET = os.environ["JWT_SECRET"]
+JWT_SECRET = validate_jwt_secret(os.getenv("JWT_SECRET"))
 
 # 将明文密码变为不可逆哈希：
 def hash_password(password: str) -> str:

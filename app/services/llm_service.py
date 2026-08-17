@@ -1,10 +1,11 @@
 import os
 import httpx
 import json
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterator
 from app.core.exceptions import (
     LLMConfigurationError,
     LLMResponseFormatError,
+    LLMStreamError,
     LLMTimeoutError,
     LLMUpstreamError,
 )
@@ -83,6 +84,7 @@ async def call_llm(
         ) from e
 
     except (
+        AttributeError,
         KeyError,
         IndexError,
         TypeError,
@@ -97,7 +99,7 @@ async def call_llm(
 async def stream_llm(
     client: httpx.AsyncClient,
     messages: list[dict[str, str]],
-) -> AsyncIterable[str]:
+) -> AsyncIterator[str]:
     config = _get_llm_config()
 
     url = f"{config['base_url']}/chat/completions"
@@ -135,16 +137,21 @@ async def stream_llm(
                 body = await response.aread()
                 raise LLMUpstreamError(body.decode(errors="replace"))
 
+            received_done = False
             async for line in response.aiter_lines():
                 if not line.startswith("data:"):
                     continue
                 data = line.removeprefix("data:").strip()
                 if data == "[DONE]":
+                    received_done = True
                     break
-                payload = json.loads(data)
-                delta = payload["choices"][0]["delta"].get("content")
+                event_payload = json.loads(data)
+                delta = event_payload["choices"][0]["delta"].get("content")
                 if delta:
                     yield delta
+
+            if not received_done:
+                raise LLMStreamError("LLM stream ended before [DONE]")
 
     except httpx.TimeoutException as exc:
         raise LLMTimeoutError(
@@ -159,4 +166,15 @@ async def stream_llm(
     except httpx.RequestError as exc:
         raise LLMUpstreamError(
             f"LLM stream request failed: {type(exc).__name__}"
+        ) from exc
+
+    except (
+        AttributeError,
+        KeyError,
+        IndexError,
+        TypeError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise LLMResponseFormatError(
+            "Unexpected LLM stream response format"
         ) from exc

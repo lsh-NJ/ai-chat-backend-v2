@@ -1,6 +1,8 @@
 import os
 import httpx
+from unittest.mock import AsyncMock
 from pathlib import Path
+from urllib.parse import urlparse
 from sqlalchemy import text
 import asyncio
 from dotenv import load_dotenv
@@ -9,6 +11,23 @@ from alembic.config import Config
 
 load_dotenv()
 os.environ["POSTGRES_DB"] = os.environ["POSTGRES_TEST_DB"]
+
+development_redis_url = os.environ["REDIS_URL"]
+test_redis_url = os.environ["REDIS_TEST_URL"]
+parsed_test_redis_url = urlparse(test_redis_url)
+test_redis_db = parsed_test_redis_url.path.lstrip("/")
+
+if (
+    development_redis_url == test_redis_url
+    or not test_redis_db.isdigit()
+    or int(test_redis_db) != 15
+):
+    raise RuntimeError(
+        "测试 Redis 必须使用与开发 Redis 不同的 15 号测试库，"
+        f"当前 REDIS_TEST_URL={test_redis_url!r}"
+    )
+
+os.environ["REDIS_URL"] = test_redis_url
 
 if not os.environ["POSTGRES_DB"].endswith("_test"):
     raise RuntimeError(
@@ -19,9 +38,15 @@ if not os.environ["POSTGRES_DB"].endswith("_test"):
 import pytest  # noqa: E402
 
 from app.main import app
-from app.db.base import Base  # noqa: E402
+from app.db.redis import close_redis, create_redis_client  # noqa: E402
 from app.db.session import AsyncSessionFactory, engine, get_db  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.core.security import create_access_token  # noqa: E402
+
+
+# 这是一个固定的有效 bcrypt 哈希，只用于构造不关心密码流程的测试用户。
+# 注册/登录测试仍会调用真实的 hash_password / verify_password。
+TEST_PASSWORD_HASH = "$2b$12$D6pRJxwBIEpO4eR/l/7OVOmJotevDNKnZxC2.0ebLckx9bpookcpu"
 
 
 def _upgrade_head() -> None:
@@ -31,18 +56,87 @@ def _upgrade_head() -> None:
     command.upgrade(cfg, "head")
 
 
-@pytest.fixture
-async def fresh_schema():
+async def _recreate_schema_and_upgrade() -> None:
     async with engine.begin() as conn:
-        # 清空整库，模拟“空数据库”
+        # 测试库已在模块加载时 fail-closed 校验；这里才允许重建 schema。
         await conn.execute(text("DROP SCHEMA public CASCADE"))
         await conn.execute(text("CREATE SCHEMA public"))
     await asyncio.to_thread(_upgrade_head)
+
+
+@pytest.fixture(scope="session")
+async def real_redis():
+    """真实且已校验为独立测试 DB 的 Redis 客户端。"""
+    client = create_redis_client(os.environ["REDIS_URL"])
+    try:
+        await client.ping()
+    except Exception as exc:
+        await close_redis(client)
+        raise RuntimeError("测试 Redis 不可用，拒绝运行测试") from exc
+
+    yield client
+    await close_redis(client)
+
+
+@pytest.fixture(scope="session")
+async def migrated_schema():
+    """整个测试会话只从空库跑一次迁移，确保日常用例使用真实迁移后的结构。"""
+    await _recreate_schema_and_upgrade()
     yield
 
 
 @pytest.fixture
-async def client(fresh_schema):
+async def fresh_schema(migrated_schema, real_redis):
+    """每个用例清空业务数据和独立测试 Redis。"""
+    await real_redis.flushdb()
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("TRUNCATE TABLE messages, conversations, users RESTART IDENTITY CASCADE")
+        )
+    yield
+    await real_redis.flushdb()
+
+
+@pytest.fixture(scope="module")
+async def upgraded_empty_schema():
+    """迁移测试专用：从空 schema 升级到 head，一次即可。"""
+    await _recreate_schema_and_upgrade()
+    yield
+
+
+@pytest.fixture
+def create_test_user(fresh_schema):
+    """创建已认证场景需要的用户，不把注册/登录成本带入无关测试。"""
+    async def _create(username: str, role: str = "user") -> User:
+        async with AsyncSessionFactory() as session:
+            user = User(
+                username=username,
+                password_hash=TEST_PASSWORD_HASH,
+                role=role,
+            )
+            session.add(user)
+            await session.commit()
+            return user
+
+    return _create
+
+
+@pytest.fixture
+def redis_client() -> AsyncMock:
+    """非缓存测试用的 Redis 替身；缓存集成测试必须另用真实 Redis。"""
+    client = AsyncMock()
+    client.get.return_value = None
+    return client
+
+
+@pytest.fixture
+async def redis_test_client(fresh_schema, real_redis):
+    """缓存集成测试使用的真实 Redis；fresh_schema 已完成清理。"""
+    return real_redis
+
+
+@pytest.fixture
+async def client(fresh_schema, redis_client):
     async def override_get_db():
         async with AsyncSessionFactory() as session:
             yield session
@@ -58,34 +152,15 @@ async def client(fresh_schema):
 
 
 @pytest.fixture
-async def test_user_id(fresh_schema) -> int:
+async def test_user_id(create_test_user) -> int:
     """为 Repository/Service 测试创建明确的资源所有者。"""
-    async with AsyncSessionFactory() as session:
-        user = User(
-            username="test-owner",
-            password_hash=(
-                "$2b$12$D6pRJxwBIEpO4eR/l/7OVOmJotevDNKnZxC2.0ebLckx9bpookcpu"
-            ),
-        )
-        session.add(user)
-        await session.commit()
-        return user.id
+    user = await create_test_user("test-owner")
+    return user.id
 
 
 @pytest.fixture
-async def auth_headers(client) -> dict[str, str]:
-    """通过真实注册、登录接口取得 Bearer token。"""
-    register_response = await client.post(
-        "/auth/register",
-        json={"username": "api-user", "password": "88888888"},
-    )
-    assert register_response.status_code == 201
-
-    login_response = await client.post(
-        "/auth/login",
-        data={"username": "api-user", "password": "88888888"},
-    )
-    assert login_response.status_code == 200
-
-    token = login_response.json()["access_token"]
+async def auth_headers(client, create_test_user) -> dict[str, str]:
+    """为受保护接口测试提供有效 JWT，认证接口另有专门的真实 bcrypt 用例。"""
+    user = await create_test_user("api-user")
+    token = create_access_token(user.id)
     return {"Authorization": f"Bearer {token}"}

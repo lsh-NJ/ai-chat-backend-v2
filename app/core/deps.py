@@ -34,3 +34,20 @@ async def get_current_user(
         )
 
     return user
+
+
+def require_role(*allowed_role: str):
+    async def check_right(
+        user: User = Depends(get_current_user)
+    ) -> User:
+        if user.role not in allowed_role:
+            raise HTTPException(
+                status_code=403,
+                detail="权限不足",
+            )
+        return user
+
+    return check_right
+
+
+require_admin = require_role("admin")

@@ -1,6 +1,23 @@
 """security.py 的纯单元测试：不碰数据库、不碰 FastAPI，直接测函数行为。"""
 
-from app.core.security import hash_password, verify_password
+import pytest
+
+from app.core.security import hash_password, validate_jwt_secret, verify_password
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, "", "   ", "replace_me", "too-short"],
+)
+def test_validate_jwt_secret_rejects_unsafe_values(value):
+    with pytest.raises(RuntimeError):
+        validate_jwt_secret(value)
+
+
+def test_validate_jwt_secret_accepts_strong_value():
+    secret = "a" * 32
+
+    assert validate_jwt_secret(secret) == secret
 
 
 def test_hash_password_salts_and_verifies():

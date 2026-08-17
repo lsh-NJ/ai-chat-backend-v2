@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
 
 from app.core.exceptions import ConversationNotFoundError
 from app.core.deps import get_current_user
 from app.db.session import get_db
+from app.db.redis import get_redis
 from app.models.user import User
 from app.schemas.conversation import ConversationCreateRequest, ConversationOut
 from app.schemas.message import MessageOut
@@ -15,11 +17,13 @@ router = APIRouter(tags=["conversations"])
 @router.post("/conversations", response_model=ConversationOut)
 async def create_conversation(
     body: ConversationCreateRequest,
+    redis: Redis = Depends(get_redis),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> ConversationOut:
     conversation = await conversation_service.create_conversation(
         session=session,
+        redis=redis,
         title=body.title,
         user_id=current_user.id,
     )
@@ -29,14 +33,16 @@ async def create_conversation(
 # 获得所有 conversation
 @router.get("/conversations", response_model=list[ConversationOut])
 async def list_conversations(
+    redis: Redis = Depends(get_redis),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> list[ConversationOut]:
     conversations = await conversation_service.list_conversations(
-        session,
-        current_user.id,
+        session=session,
+        redis=redis,
+        user_id=current_user.id,
     )
-    return [ConversationOut.model_validate(conversation) for conversation in conversations]
+    return conversations
 
 
 # 获得相应 conversation_id 的 conversation

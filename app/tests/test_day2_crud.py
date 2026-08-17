@@ -18,6 +18,7 @@ async def test_create_flush_commit_select(fresh_schema, test_user_id):
             conversation_id=conv.id,
             role="user",
             content="你好",
+            is_complete=True,
         ))
         await session.commit()
         conv_id = conv.id

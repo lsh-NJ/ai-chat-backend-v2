@@ -1,3 +1,4 @@
+import os
 import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -6,9 +7,12 @@ from sqlalchemy import text
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
 from app.api.auth import router as auth_router
+from app.api.user import router as user_router
 from app.db.session import engine, close_db
-import app.models.user  # noqa: F401  注册 User 模型，避免运行期 Mapper 配置失败
+from app.db.redis import create_redis_client, close_redis
+import app.models.user  # 注册 User 模型，避免运行期 Mapper 配置失败
 
+REDIS_URL = os.environ["REDIS_URL"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,13 +31,21 @@ async def lifespan(app: FastAPI):
         max_keepalive_connections=20,
     )
 
+    redis = create_redis_client(REDIS_URL)
+
     async with httpx.AsyncClient(
         timeout=timeout,
         limits=limits,
     ) as client:
-        app.state.http_client = client
-        yield
-        await close_db()
+        try:
+            await redis.ping()
+            app.state.redis = redis
+            app.state.http_client = client
+            yield
+
+        finally:
+            await close_redis(redis)
+            await close_db()
 
 
 # 创建 app 对象，后面是后端应用本体
@@ -50,3 +62,4 @@ async def health() -> dict[str, str]:
 app.include_router(chat_router)
 app.include_router(conversations_router)
 app.include_router(auth_router)
+app.include_router(user_router)

@@ -23,6 +23,7 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False, # SQL 日志输出
     pool_pre_ping=True, # 数据库连接池健康检查
+    hide_parameters=True, # 异常与 SQL 日志不暴露消息正文等参数
 )
 
 

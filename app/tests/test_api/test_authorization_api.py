@@ -1,27 +1,15 @@
-import httpx
 import pytest
 
+from app.core.security import create_access_token
 from app.services import chat_service
 
 
-async def _register_and_login(
-    client: httpx.AsyncClient,
+async def _create_user_headers(
+    create_test_user,
     username: str,
 ) -> dict[str, str]:
-    register_response = await client.post(
-        "/auth/register",
-        json={"username": username, "password": "88888888"},
-    )
-    assert register_response.status_code == 201
-
-    login_response = await client.post(
-        "/auth/login",
-        data={"username": username, "password": "88888888"},
-    )
-    assert login_response.status_code == 200
-
-    token = login_response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    user = await create_test_user(username)
+    return {"Authorization": f"Bearer {create_access_token(user.id)}"}
 
 
 @pytest.mark.parametrize(
@@ -51,9 +39,9 @@ async def test_invalid_token_returns_401(client):
     assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
-async def test_users_cannot_read_each_others_conversations(client):
-    owner_headers = await _register_and_login(client, "owner")
-    other_headers = await _register_and_login(client, "other")
+async def test_users_cannot_read_each_others_conversations(client, create_test_user):
+    owner_headers = await _create_user_headers(create_test_user, "owner")
+    other_headers = await _create_user_headers(create_test_user, "other")
 
     owner_conversation = await client.post(
         "/conversations",
@@ -77,6 +65,7 @@ async def test_users_cannot_read_each_others_conversations(client):
 @pytest.mark.parametrize("path", ["/chat", "/chat/stream"])
 async def test_users_cannot_chat_in_each_others_conversations(
     client,
+    create_test_user,
     monkeypatch,
     path,
 ):
@@ -86,8 +75,8 @@ async def test_users_cannot_chat_in_each_others_conversations(
     monkeypatch.setattr(chat_service, "call_llm", llm_must_not_run)
     monkeypatch.setattr(chat_service, "stream_llm", llm_must_not_run)
 
-    owner_headers = await _register_and_login(client, "chat-owner")
-    other_headers = await _register_and_login(client, "chat-other")
+    owner_headers = await _create_user_headers(create_test_user, "chat-owner")
+    other_headers = await _create_user_headers(create_test_user, "chat-other")
 
     owner_conversation = await client.post(
         "/conversations",

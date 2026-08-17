@@ -70,6 +70,7 @@ async def test_message_add(fresh_schema, test_user_id):
             conversation_id=conv.id,
             role="user",
             content="你好",
+            is_complete=True,
         )
         await session.commit()
         message_id = message.id
@@ -89,9 +90,9 @@ async def test_message_list_by_conversation_ordered(fresh_schema, test_user_id):
         conversations = conversation_repository.ConversationRepository(session)
         conv = await conversations.create(title="历史测试", user_id=test_user_id)
         messages = message_repository.MessageRepository(session)
-        await messages.add(conv.id, "user", "第一条")
-        await messages.add(conv.id, "assistant", "回复一")
-        await messages.add(conv.id, "user", "第二条")
+        await messages.add(conv.id, "user", "第一条", is_complete=True)
+        await messages.add(conv.id, "assistant", "回复一", is_complete=True)
+        await messages.add(conv.id, "user", "第二条", is_complete=True)
         await session.commit()
         conversation_id = conv.id
 
@@ -113,7 +114,12 @@ async def test_message_list_returns_recent_limit(fresh_schema, test_user_id):
         conv = await conversations.create(title="limit 测试", user_id=test_user_id)
         messages = message_repository.MessageRepository(session)
         for i in range(25):
-            await messages.add(conv.id, "user", f"消息 {i}")
+            await messages.add(
+                conv.id,
+                "user",
+                f"消息 {i}",
+                is_complete=True,
+            )
         await session.commit()
         conversation_id = conv.id
 

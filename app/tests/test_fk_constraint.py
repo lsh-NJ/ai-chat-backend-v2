@@ -17,6 +17,7 @@ async def test_message_fk_violation_is_rejected(fresh_schema):
                 conversation_id=-1,
                 role="user",
                 content="没有父会话的消息",
+                is_complete=True,
             )
 
         # 事务已失败，必须先回滚，否则这个 session 后续任何操作都会报

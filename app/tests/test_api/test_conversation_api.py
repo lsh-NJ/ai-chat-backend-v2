@@ -13,7 +13,6 @@ async def _create_conversation(client, header: dict[str, str],title: str | None 
     return response.json()
 
 
-# POST /conversations 创建会话成功路径，数据真实落库
 async def test_create_conversation(client, auth_headers):
     body = await _create_conversation(client, auth_headers, title="会话 1")
 
@@ -71,11 +70,13 @@ async def test_history_returns_messages_in_order(client, auth_headers):
             conversation_id=conversation_id,
             role="user",
             content="第一条",
+            is_complete=True,
         )
         await repo.add(
             conversation_id=conversation_id,
             role="assistant",
             content="第二条",
+            is_complete=True,
         )
         await session.commit()
 
@@ -87,3 +88,4 @@ async def test_history_returns_messages_in_order(client, auth_headers):
         ("user", "第一条"),
         ("assistant", "第二条"),
     ]
+    assert [message["is_complete"] for message in body] == [True, True]

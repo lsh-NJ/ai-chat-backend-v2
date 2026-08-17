@@ -9,4 +9,4 @@ class MessageOut(BaseModel):
     role: str
     content: str
     created_at: datetime
-
+    is_complete: bool

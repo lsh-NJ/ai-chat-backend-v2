@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     BigInteger,
     CheckConstraint,
     DateTime,
@@ -62,6 +63,10 @@ class Message(Base):
         server_default=func.now(),
     )
 
+    is_complete: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
     conversation: Mapped["Conversation"] = relationship(
         back_populates="messages",
     )

@@ -8,11 +8,18 @@ class MessageRepository:
         self.session: AsyncSession = session
 
     # 添加对话历史
-    async def add(self, conversation_id: int, role: str, content: str) -> Message:
+    async def add(
+        self,
+        conversation_id: int,
+        role: str,
+        content: str,
+        is_complete: bool,
+    ) -> Message:
         message = Message(
-            conversation_id=conversation_id, 
-            role=role, 
-            content=content
+            conversation_id=conversation_id,
+            role=role,
+            content=content,
+            is_complete=is_complete,
         )
         self.session.add(message)
         await self.session.flush()

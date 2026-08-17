@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
+from app.db.redis import get_redis
 from app.db.session import get_db
 from app.models.user import User
 from app.services import chat_service
@@ -42,6 +44,7 @@ def to_http_exception(e: LLMServiceError) -> HTTPException:
 async def chat(
     chat_request: ChatRequest,
     request: Request,
+    redis: Redis = Depends(get_redis),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> ChatResponse:
@@ -52,6 +55,7 @@ async def chat(
             message=chat_request.message,
             client=request.app.state.http_client,
             user_id=current_user.id,
+            redis=redis,
         )
 
     except ConversationNotFoundError as e:
@@ -73,6 +77,7 @@ async def chat(
 async def chat_stream(
     chat_request: ChatRequest,
     request: Request,
+    redis: Redis = Depends(get_redis),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
@@ -83,6 +88,7 @@ async def chat_stream(
             client=request.app.state.http_client,
             session=session,
             user_id=current_user.id,
+            redis=redis,
         )
 
     except ConversationNotFoundError as exc:

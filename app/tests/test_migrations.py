@@ -1,4 +1,7 @@
+import asyncio
 from pathlib import Path
+
+from alembic import command
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
@@ -11,13 +14,13 @@ def _alembic_config() -> Config:
     return Config(str(ini_path))
 
 
-def _head_revision() -> str:
+def _head_revision() -> str | None:
     scripts = ScriptDirectory.from_config(_alembic_config())
     return scripts.get_current_head()
 
 
 # 目标：空库 upgrade head 后，业务表全部存在
-async def test_empty_schema_upgrade_creates_all_tables(fresh_schema):
+async def test_empty_schema_upgrade_creates_all_tables(upgraded_empty_schema):
     async with engine.connect() as conn:
         rows = await conn.execute(
             text(
@@ -31,7 +34,7 @@ async def test_empty_schema_upgrade_creates_all_tables(fresh_schema):
 
 
 # 目标：迁移完成后 alembic_version 与代码最新版本一致
-async def test_alembic_version_is_at_head(fresh_schema):
+async def test_alembic_version_is_at_head(upgraded_empty_schema):
     async with engine.connect() as conn:
         version = (
             await conn.execute(
@@ -40,3 +43,8 @@ async def test_alembic_version_is_at_head(fresh_schema):
         ).scalar_one()
 
     assert version == _head_revision()
+
+
+# 目标：ORM 模型与迁移 head 一致，不存在遗漏的新迁移
+async def test_models_match_migration_head(upgraded_empty_schema):
+    await asyncio.to_thread(command.check, _alembic_config())

@@ -5,9 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.auth import (
     RegisterRequest,
-    UserOut,
     TokenOut,
 )
+from app.schemas.user import UserOut
 from app.models.user import User
 from app.services import auth_service
 from app.core.exceptions import (

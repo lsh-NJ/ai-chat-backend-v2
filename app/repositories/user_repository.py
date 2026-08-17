@@ -16,10 +16,16 @@ class UserRepository:
 
 
     async def get_by_username(self, username: str) -> User | None:
-        user: Result = await self.session.execute(select(User).where(User.username == username))
-        return user.scalar_one_or_none()
+        user_result: Result = await self.session.execute(select(User).where(User.username == username))
+        return user_result.scalar_one_or_none()
 
 
     async def get_by_id(self, user_id: int) -> User | None:
-        user: Result = await self.session.execute(select(User).where(User.id == user_id))
-        return user.scalar_one_or_none()
+        user_result: Result = await self.session.execute(select(User).where(User.id == user_id))
+        return user_result.scalar_one_or_none()
+
+
+    async def list_users(self) -> list[User]:
+        user_result: Result = await self.session.execute(select(User))
+        users = user_result.scalars().all()
+        return list(users)

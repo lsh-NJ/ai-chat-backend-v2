@@ -1,5 +1,4 @@
 import os
-import httpx
 import pytest
 import jwt 
 from dotenv import load_dotenv
@@ -16,41 +15,21 @@ from app.core.exceptions import InvalidTokenError
 load_dotenv()
 JWT_SECRET = os.environ["JWT_SECRET"]
 
-async def test_create_token_valid(client):
-    register_response: httpx.Response = await client.post(
-        "/auth/register",
-        json = {
-            "username": "111", 
-            "password": "88888888"
-        }
-    )
-    assert register_response.status_code == 201
-
-    body = register_response.json()
-    token = create_access_token(int(body["id"]))
+async def test_create_token_valid():
+    token = create_access_token(1)
     user_id: int = decode_access_token(token)
-    assert user_id == int(body["id"])
+    assert user_id == 1
 
 
-async def test_token_expired(client):
-    register_response: httpx.Response = await client.post(
-        "/auth/register",
-        json = {
-            "username": "111", 
-            "password": "88888888"
-        }
-    )
-    assert register_response.status_code == 201
-
-    body = register_response.json()
-    token = create_access_token(int(body["id"]), -1)
+async def test_token_expired():
+    token = create_access_token(1, -1)
 
     with pytest.raises(InvalidTokenError) as e:
         user_id: int = decode_access_token(token)
         assert str(e) == "认证超时"
 
 
-async def test_fake_secret_token(client):
+async def test_fake_secret_token():
     pyload = {
         "sub": "1", 
         "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
@@ -67,7 +46,7 @@ async def test_fake_secret_token(client):
         decode_access_token(fake_token)
 
 
-async def test_fake_id_token(client):
+async def test_fake_id_token(fresh_schema):
     pyload = {
         "sub": "-1", 
         "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
@@ -87,66 +66,24 @@ async def test_fake_id_token(client):
 
 
 # 检查是否存在越权访问
-async def test_auth(client):
-    user_out1 = await client.post(
-        "/auth/register",
-        json={
-            "username": "AAA",
-            "password": "88888888",
-        }
-    )
-
-    user_out2 = await client.post(
-        "/auth/register",
-        json = {
-            "username": "BBB",
-            "password": "999999999",
-        }
-    )
-
-    assert user_out1.status_code == 201
-    assert user_out2.status_code == 201
-
-    user1 = user_out1.json()
-    user_id1 = user1["id"]
-    user2 = user_out2.json()
-    user_id2 = user2["id"]
+async def test_auth(create_test_user):
+    user1 = await create_test_user("AAA")
+    user2 = await create_test_user("BBB")
 
     async with AsyncSessionFactory() as session:
         conversation_repository = ConversationRepository(session)
         conversation_id1 = await conversation_repository.create(
             title="用户 1",
-            user_id = user_id1,
+            user_id = user1.id,
         )
         conversation_id2 = await conversation_repository.create(
             title="用户 2",
-            user_id=user_id2,
+            user_id=user2.id,
         )
         await session.commit()
 
-    access_token1 = await client.post(
-        "/auth/login",
-        data={
-            "username": "AAA",
-            "password": "88888888",
-        }
-    )
-
-    access_token2 = await client.post(
-        "/auth/login",
-        data={
-            "username": "BBB",
-            "password": "999999999",
-        }
-    )
-
-    assert access_token1.status_code == 200
-    assert access_token2.status_code == 200
-
-    body1 = access_token1.json()
-    token1 = body1["access_token"]
-    body2 = access_token2.json()
-    token2 = body2["access_token"]
+    token1 = create_access_token(user1.id)
+    token2 = create_access_token(user2.id)
 
     async with AsyncSessionFactory() as session:
         userA: User = await get_current_user(token1, session)

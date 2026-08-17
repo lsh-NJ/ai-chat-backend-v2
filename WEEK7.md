@@ -102,14 +102,14 @@ docker-compose.yml            # 增加 redis 服务
 
 ### 任务
 
-- [ ] 实现 `core/security.py`：JWT 签发与校验（固定 HS256、`sub`、`exp`）
-- [ ] 实现 `get_current_user` 依赖（`OAuth2PasswordBearer`）
-- [ ] 保护 `/conversations*` 和 `/chat*`：无 token 或无效 token 返回 401
-- [ ] 给 `conversations` 加 `user_id` 外键；所有会话查询按当前用户过滤
-- [ ] 创建会话、聊天时把当前用户的 `user_id` 写入
-- [ ] 访问他人会话返回 404（不是 403）
-- [ ] `JWT_SECRET` 从配置读取，缺失 fail-closed，不硬编码
-- [ ] 测试：无 token 401、伪造/过期 token 401、访问他人会话 404、自己的会话正常
+- [x] 实现 `core/security.py`：JWT 签发与校验（固定 HS256、`sub`、`exp`）
+- [x] 实现 `get_current_user` 依赖（`OAuth2PasswordBearer`）
+- [x] 保护 `/conversations*` 和 `/chat*`：无 token 或无效 token 返回 401
+- [x] 给 `conversations` 加 `user_id` 外键；所有会话查询按当前用户过滤
+- [x] 创建会话、聊天时把当前用户的 `user_id` 写入
+- [x] 访问他人会话返回 404（不是 403）
+- [x] `JWT_SECRET` 从配置读取，缺失 fail-closed，不硬编码
+- [x] 测试：无 token 401、伪造/过期 token 401、访问他人会话 404、自己的会话正常
 
 ### 只补这些知识
 
@@ -121,10 +121,10 @@ docker-compose.yml            # 增加 redis 服务
 
 ### Day 2 验收
 
-- [ ] 能手画 JWT 三段的结构并解释每一段
-- [ ] 能解释越权访问为什么返回 404 而不是 403
-- [ ] 所有资源接口必须先通过认证依赖
-- [ ] 数据库里每条 conversation 都能对应到明确的 user_id
+- [x] 能手画 JWT 三段的结构并解释每一段
+- [x] 能解释越权访问为什么返回 404 而不是 403
+- [x] 所有资源接口必须先通过认证依赖
+- [x] 数据库里每条 conversation 都能对应到明确的 user_id
 
 ---
 
@@ -132,12 +132,12 @@ docker-compose.yml            # 增加 redis 服务
 
 ### 任务
 
-- [ ] 定义 user / admin 两种角色，注册用户默认为 user
-- [ ] 实现 `require_role` / `require_admin` 依赖；新增一个 admin 接口（如 `GET /users`）
-- [ ] 权限不足返回 403
-- [ ] 收尾 D-001：`messages` 加 `is_complete` 列（迁移）；流式正常结束为 true，中断为 false；历史接口返回该字段
-- [ ] 收尾 D-002：流式保存 assistant 消息包 `try/except + logging`；保存失败不破坏已经发出的流
-- [ ] 测试：中断标记、LLM 错误标记、保存失败兜底、admin/user 权限矩阵
+- [x] 定义 user / admin 两种角色，注册用户默认为 user
+- [x] 实现 `require_role` / `require_admin` 依赖；新增一个 admin 接口（如 `GET /users`）
+- [x] 权限不足返回 403
+- [x] 收尾 D-001：`messages` 加 `is_complete` 列（迁移）；流式正常结束为 true，中断为 false；历史接口返回该字段
+- [x] 收尾 D-002：流式保存 assistant 消息包 `try/except + logging`；保存失败不破坏已经发出的流
+- [x] 测试：中断标记、LLM 错误标记、保存失败兜底、admin/user 权限矩阵
 
 ### 只补这些知识
 
@@ -147,10 +147,10 @@ docker-compose.yml            # 增加 redis 服务
 
 ### Day 3 验收
 
-- [ ] 权限矩阵有测试覆盖（user 访问 admin 接口返回 403）
-- [ ] 中断的流式消息在数据库里 `is_complete = false`
-- [ ] 保存失败不会让流中断，且日志有可排查记录
-- [ ] `Decisions.md` 中 D-001 / D-002 的待办状态已更新
+- [x] 权限矩阵有测试覆盖（user 访问 admin 接口返回 403）
+- [x] 中断的流式消息在数据库里 `is_complete = false`
+- [x] 保存失败不会让流中断，且日志有可排查记录
+- [x] `Decisions.md` 中 D-001 / D-002 的待办状态已更新
 
 ---
 
@@ -158,12 +158,12 @@ docker-compose.yml            # 增加 redis 服务
 
 ### 任务
 
-- [ ] `docker-compose.yml` 增加 redis 服务；`.env.example` 增加 `REDIS_URL`
-- [ ] 实现异步 Redis 客户端（连接池），在 lifespan 中正确关闭
-- [ ] 给 `GET /conversations` 加 Redis 缓存：TTL + 缓存键包含 `user_id`
-- [ ] 找出所有会改变会话列表内容的写操作（创建会话、标题变化、删除），全部主动失效
-- [ ] 增加缓存命中与失效的集成测试
-- [ ] 测试环境：真实 Redis + 独立测试库，fail-closed 校验，不静默跳过
+- [x] `docker-compose.yml` 增加 redis 服务；`.env.example` 增加 `REDIS_URL`
+- [x] 实现异步 Redis 客户端（连接池），在 lifespan 中正确关闭
+- [x] 给 `GET /conversations` 加 Redis 缓存：TTL + 缓存键包含 `user_id`
+- [x] 找出所有会改变会话列表内容的写操作（创建会话、标题变化、删除），全部主动失效
+- [x] 增加缓存命中与失效的集成测试
+- [x] 测试环境：真实 Redis + 独立测试库，fail-closed 校验，不静默跳过
 - [ ] （可选加分）用 Redis 给 `/chat` 做滑动窗口限流
 
 ### 只补这些知识
@@ -176,10 +176,10 @@ docker-compose.yml            # 增加 redis 服务
 
 ### Day 4 验收
 
-- [ ] 能画出 cache-aside 的读流程和写流程
-- [ ] 失效后第二次请求能拿到新数据（有测试证明）
-- [ ] 能分别解释缓存穿透/击穿/雪崩并各给一个应对手段
-- [ ] Redis 不可用时测试 fail-closed（失败而不是假装通过）
+- [x] 能画出 cache-aside 的读流程和写流程
+- [x] 失效后第二次请求能拿到新数据（有测试证明）
+- [x] 能分别解释缓存穿透/击穿/雪崩并各给一个应对手段
+- [x] Redis 不可用时测试 fail-closed（失败而不是假装通过）
 
 ---
 
