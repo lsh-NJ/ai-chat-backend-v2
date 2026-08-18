@@ -24,10 +24,10 @@ API 流式输出
 - [x] 定义版本化的重试任务契约，任务不包含密码、token 等认证秘密
 - [x] 给 assistant 消息增加数据库级幂等键，重复消费不会重复落库
 - [x] 用 Redis Stream 投递失败任务，并限制 Stream 长度
-- [ ] 独立 Worker 使用 Consumer Group 消费，数据库 commit 成功后才 ACK
-- [ ] Worker 崩溃后能认领 pending 消息并继续处理
-- [ ] 超过最大重试次数的任务进入 dead-letter stream
-- [ ] `/chat/stream` 保存失败时入队；队列也失败时仍不破坏已发出的响应
+- [x] 独立 Worker 使用 Consumer Group 消费，数据库 commit 成功后才 ACK
+- [x] Worker 崩溃后能认领 pending 消息并继续处理
+- [x] 超过最大重试次数的任务进入 dead-letter stream
+- [x] `/chat/stream` 保存失败时入队；队列也失败时仍不破坏已发出的响应
 - [ ] Docker Compose 能启动 API、PostgreSQL、Redis 和 Worker
 - [ ] CI 自动运行 lint、类型检查和 pytest
 - [ ] mock LLM 下完成 50 并发压测，记录 P50、P95 和错误率
@@ -175,13 +175,42 @@ load_tests/
 
 ### 任务
 
-- [ ] 流式 assistant 第一次保存前生成一次 `idempotency_key`
-- [ ] 首次保存与重试任务使用同一个 key，覆盖“提交结果不确定”场景
-- [ ] 保存失败后入队；入队失败只记录脱敏日志，不破坏已发出的响应
-- [ ] 为 API、Worker 日志加入可关联的 `job_id`
+- [x] 流式 assistant 第一次保存前生成一次 `idempotency_key`
+- [x] 首次保存与重试任务使用同一个 key，覆盖“提交结果不确定”场景
+- [x] 保存失败后入队；入队失败只记录脱敏日志，不破坏已发出的响应
+- [x] 为 API、Worker 日志加入可关联的 `job_id`
 - [ ] 增加 Dockerfile，并在 Compose 中加入 API 和 Worker 服务
 - [ ] Worker 支持 SIGTERM/KeyboardInterrupt 优雅停止
-- [ ] 补齐失败矩阵测试
+- [x] 补齐失败矩阵测试
+
+### 第二阶段细则：Worker 运行入口
+
+Worker 分成三层，不能把业务处理、轮询和进程生命周期塞进同一个无限循环：
+
+1. `process_retry_entry()`：处理单条任务，负责数据库事务、幂等和 ACK，现有实现继续复用。
+2. `run_once()`：完成一轮有限调度，先认领超时 pending，再读取一批新任务；单条可重试故障不能阻断同批其他任务。
+3. 独立 runner：创建 Redis 客户端、安装 SIGTERM/SIGINT handler、循环调用 `run_once()`、对 Redis 暂时故障退避，并在退出时关闭 Redis 和数据库连接池。
+
+运行入口使用 `python -m app.workers.run_message_retry_worker`，供 Docker Worker service 调用。Consumer name 优先从 `WORKER_CONSUMER_NAME` 读取，未配置时使用 hostname + pid，避免多个 Worker 共享同一个 consumer 身份。
+
+每次 `XREADGROUP` 必须设置有限的 block timeout，使停止信号能在明确时间内生效。收到停止信号后只设置 `asyncio.Event`：停止领取新任务，但允许当前任务完成 commit/ACK；容器的 stop grace period 必须大于单条任务的超时预算。
+
+#### 重要内容
+
+- 单条处理、单轮调度和进程生命周期为什么必须分层。
+- 为什么 SIGTERM 不能直接取消正在 commit 的任务。
+- 为什么未知编程异常应让 Worker 退出并由进程管理器重启，而数据库/Redis 暂时故障可以保留任务并退避重试。
+- 为什么 Consumer Group 名可以固定，但 consumer name 应区分进程实例。
+- 为什么轮询必须有有限阻塞时间，不能永久阻塞也不能无等待空转。
+
+#### 运行入口验收
+
+- [ ] `run_once()` 可在测试中有限执行并同时处理 reclaimed 与新任务
+- [ ] 单条数据库暂时故障保留 pending，但不阻断同批其他任务
+- [ ] 未知异常继续抛出，不被轮询层吞掉
+- [ ] stop event 设置后不再领取新任务，当前任务可以完成
+- [ ] Redis 暂时不可用时退避，避免 CPU 空转和日志风暴
+- [ ] runner 退出时关闭 Redis 客户端和 SQLAlchemy engine
 
 ### 失败矩阵
 
@@ -194,9 +223,9 @@ load_tests/
 
 ### Day 4 验收
 
-- [ ] 保存失败且入队成功时，Worker 最终补齐历史消息
-- [ ] 队列失败不会把 StreamingResponse 弄断
-- [ ] 重复任务不会产生重复消息
+- [x] 保存失败且入队成功时，Worker 最终补齐历史消息
+- [x] 队列失败不会把 StreamingResponse 弄断
+- [x] 重复任务不会产生重复消息
 - [ ] `docker compose up` 能启动 API、PostgreSQL、Redis、Worker
 
 ---
