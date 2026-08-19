@@ -1,18 +1,20 @@
-import os
 import asyncio
-from dotenv import load_dotenv
+import os
 from logging.config import fileConfig
 
+from dotenv import load_dotenv
 from sqlalchemy import pool
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import URL, Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
 from app.db.base import Base
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.user import User
+
+# Importing every model registers its table on Base.metadata for autogenerate.
+_REGISTERED_MODELS = (Conversation, Message, User)
 
 
 load_dotenv()
@@ -21,12 +23,18 @@ load_dotenv()
 # access to the values within the .ini file in use.
 config = context.config
 
-url = (
-    f"{os.environ["DRIVER"]}://{os.environ["POSTGRES_USER"]}:"
-    f"{os.environ["POSTGRES_PASSWORD"]}@localhost:"
-    f"{os.environ["POSTGRES_PORT"]}/{os.environ["POSTGRES_DB"]}"
+url = URL.create(
+    drivername=os.environ["DRIVER"],
+    username=os.environ["POSTGRES_USER"],
+    password=os.environ["POSTGRES_PASSWORD"],
+    host=os.getenv("POSTGRES_HOST", "localhost"),
+    port=int(os.environ["POSTGRES_PORT"]),
+    database=os.environ["POSTGRES_DB"],
 )
-config.set_main_option("sqlalchemy.url", url)
+config.set_main_option(
+    "sqlalchemy.url",
+    url.render_as_string(hide_password=False).replace("%", "%%"),
+)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

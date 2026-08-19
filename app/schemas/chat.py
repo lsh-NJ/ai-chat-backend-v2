@@ -1,4 +1,5 @@
 from typing import Annotated
+
 from pydantic import BaseModel, StringConstraints
 
 NonEmptyMessage = Annotated[

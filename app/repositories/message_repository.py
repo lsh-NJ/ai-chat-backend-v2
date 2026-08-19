@@ -1,11 +1,10 @@
 from uuid import UUID
 
-from app.models.message import Message
-
-from sqlalchemy import select, Result
+from sqlalchemy import Result, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.message import Message
 
 IDEMPOTENCY_CONSTRAINT = "uq_messages_idempotency_key"
 

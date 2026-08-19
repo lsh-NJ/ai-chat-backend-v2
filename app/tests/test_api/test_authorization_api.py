@@ -1,6 +1,8 @@
 import pytest
 
 from app.core.security import create_access_token
+from app.db.session import AsyncSessionFactory
+from app.models.user import User
 from app.services import chat_service
 
 
@@ -33,6 +35,26 @@ async def test_invalid_token_returns_401(client):
     response = await client.get(
         "/conversations",
         headers={"Authorization": "Bearer forged-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+
+
+async def test_inactive_user_token_returns_401(client):
+    async with AsyncSessionFactory() as session:
+        user = User(
+            username="inactive-token",
+            password_hash="unused-valid-test-hash",
+            is_active=False,
+        )
+        session.add(user)
+        await session.commit()
+        user_id = user.id
+
+    response = await client.get(
+        "/conversations",
+        headers={"Authorization": f"Bearer {create_access_token(user_id)}"},
     )
 
     assert response.status_code == 401

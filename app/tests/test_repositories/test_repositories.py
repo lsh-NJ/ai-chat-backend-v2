@@ -3,10 +3,8 @@ from sqlalchemy import select
 from app.db.session import AsyncSessionFactory
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.repositories import (
-    conversation_repository,
-    message_repository
-)
+from app.repositories import conversation_repository, message_repository
+
 
 # 目标：conversation_repository.create 落库后，新 session 能查回
 async def test_conversation_create(fresh_schema, test_user_id):

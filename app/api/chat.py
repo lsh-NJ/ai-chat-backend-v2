@@ -1,23 +1,23 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user
-from app.db.redis import get_redis
-from app.db.session import get_db
-from app.models.user import User
-from app.services import chat_service
-from app.schemas.chat import (
-    ChatResponse,
-    ChatRequest,
-)
 from app.core.exceptions import (
+    ConversationNotFoundError,
     LLMConfigurationError,
     LLMServiceError,
     LLMTimeoutError,
-    ConversationNotFoundError
 )
+from app.db.redis import get_redis
+from app.db.session import get_db
+from app.models.user import User
+from app.schemas.chat import (
+    ChatRequest,
+    ChatResponse,
+)
+from app.services import chat_service
 
 router = APIRouter(tags=["chat"])
 

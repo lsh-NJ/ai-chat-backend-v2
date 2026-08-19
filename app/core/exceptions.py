@@ -1,4 +1,3 @@
-from sqlalchemy.exc import IntegrityError
 
 # 所有 LLM 错误的基类
 class LLMServiceError(Exception):

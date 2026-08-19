@@ -1,11 +1,9 @@
-import pytest
 import httpx
 from sqlalchemy import select
 
-from app.main import app
-from app.db.session import AsyncSessionFactory, get_db
+from app.core.security import hash_password, verify_password
+from app.db.session import AsyncSessionFactory
 from app.models.user import User
-from app.core.security import verify_password
 
 
 # 测试注册
@@ -83,6 +81,25 @@ async def test_login_wrong_password(client):
     )
 
     assert login_response.status_code == 401
+
+
+async def test_inactive_user_cannot_login(client):
+    async with AsyncSessionFactory() as session:
+        session.add(
+            User(
+                username="inactive-login",
+                password_hash=hash_password("88888888"),
+                is_active=False,
+            )
+        )
+        await session.commit()
+
+    response = await client.post(
+        "/auth/login",
+        data={"username": "inactive-login", "password": "88888888"},
+    )
+
+    assert response.status_code == 401
 
 
 async def test_register_weak_password(client):

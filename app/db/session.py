@@ -1,5 +1,6 @@
 import os
 from collections.abc import AsyncGenerator
+
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -7,12 +8,11 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-
 DATABASE_URL = URL.create(
     drivername="postgresql+asyncpg",
     username=os.environ["POSTGRES_USER"],
     password=os.environ["POSTGRES_PASSWORD"],
-    host="localhost",
+    host=os.getenv("POSTGRES_HOST", "localhost"),
     port=int(os.environ["POSTGRES_PORT"]),
     database=os.environ["POSTGRES_DB"],
 )

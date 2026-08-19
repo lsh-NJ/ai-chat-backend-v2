@@ -1,7 +1,7 @@
-import httpx
 from app.db.session import AsyncSessionFactory
 from app.models.conversation import Conversation
 from app.repositories.message_repository import MessageRepository
+
 
 async def _create_conversation(client, header: dict[str, str],title: str | None = None) -> dict:
     response = await client.post(

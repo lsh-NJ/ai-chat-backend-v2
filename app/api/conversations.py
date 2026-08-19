@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConversationNotFoundError
 from app.core.deps import get_current_user
-from app.db.session import get_db
+from app.core.exceptions import ConversationNotFoundError
 from app.db.redis import get_redis
+from app.db.session import get_db
 from app.models.user import User
 from app.schemas.conversation import ConversationCreateRequest, ConversationOut
 from app.schemas.message import MessageOut

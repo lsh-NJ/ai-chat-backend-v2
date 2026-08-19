@@ -1,7 +1,8 @@
-from sqlalchemy import select, Result
+from sqlalchemy import Result, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
-from sqlalchemy.ext.asyncio import AsyncSession
+
 
 class ConversationRepository:
     def __init__(self, session: AsyncSession):

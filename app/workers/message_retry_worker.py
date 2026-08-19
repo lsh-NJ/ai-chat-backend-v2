@@ -1,5 +1,6 @@
 """Worker logic for retrying assistant message persistence."""
 
+import asyncio
 import logging
 from collections.abc import Mapping
 from typing import Literal
@@ -22,13 +23,15 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.schemas.retry_job import MessageRetryJob
 
-
 logger = logging.getLogger("app")
 
 MAX_DELIVERY_ATTEMPTS = 3
 RECLAIM_IDLE_TIME_MS = 60_000
 CLAIM_BATCH_SIZE = 10
+READ_BATCH_SIZE = 10
+READ_BLOCK_MS = 1_000
 RetryOutcome = Literal["acked", "dead_lettered"]
+RetryEntry = tuple[str, RedisDecodedFields, int]
 
 
 class RetryJobRejected(Exception):
@@ -223,6 +226,121 @@ async def reclaim_pending_entries(
         entries.append((entry_id, dict(raw_fields), delivery_count))
 
     return next_start_id, entries, deleted_entry_ids
+
+
+async def read_new_entries(
+    redis: Redis,
+    consumer_name: str,
+    *,
+    count: int = READ_BATCH_SIZE,
+    block_ms: int = READ_BLOCK_MS,
+) -> list[RetryEntry]:
+    """从 Consumer Group 读取一批尚未投递过的新任务。"""
+    if count < 1:
+        raise ValueError("count must be at least 1")
+    if block_ms < 1:
+        raise ValueError("block_ms must be at least 1")
+
+    streams = await redis.xreadgroup(
+        groupname=CONSUMER_GROUP_NAME,
+        consumername=consumer_name,
+        streams={RETRY_STREAM_KEY: ">"},
+        count=count,
+        block=block_ms,
+    )
+    entries: list[RetryEntry] = []
+    for _, stream_entries in streams:
+        entries.extend(
+            (str(entry_id), dict(fields), 1)
+            for entry_id, fields in stream_entries
+        )
+    return entries
+
+
+async def run_once(
+    redis: Redis,
+    consumer_name: str,
+    *,
+    claim_start_id: str = "0-0",
+    claim_min_idle_time_ms: int = RECLAIM_IDLE_TIME_MS,
+    claim_count: int = CLAIM_BATCH_SIZE,
+    read_count: int = READ_BATCH_SIZE,
+    read_block_ms: int = READ_BLOCK_MS,
+    stop_event: asyncio.Event | None = None,
+) -> tuple[str, int]:
+    """有限执行一轮 reclaimed + new 任务调度。
+
+    SQLAlchemy 暂时故障只影响当前 entry；任务保持 pending，同批其他任务
+    仍可继续。Redis 故障和未知编程异常交给进程生命周期层处理。
+    """
+    if stop_event is not None and stop_event.is_set():
+        return claim_start_id, 0
+
+    next_claim_start_id, reclaimed, deleted_entry_ids = (
+        await reclaim_pending_entries(
+            redis,
+            consumer_name,
+            min_idle_time_ms=claim_min_idle_time_ms,
+            start_id=claim_start_id,
+            count=claim_count,
+        )
+    )
+    if deleted_entry_ids:
+        logger.error(
+            "pending retry payload missing after stream trim",
+            extra={
+                "attempt": 0,
+                "status": "pending_payload_missing",
+                "error_type": "StreamEntryTrimmed",
+                "deleted_count": len(deleted_entry_ids),
+            },
+        )
+
+    processed = await _process_entries(
+        redis,
+        reclaimed,
+        stop_event=stop_event,
+    )
+    if stop_event is not None and stop_event.is_set():
+        return next_claim_start_id, processed
+
+    new_entries = await read_new_entries(
+        redis,
+        consumer_name,
+        count=read_count,
+        block_ms=read_block_ms,
+    )
+    processed += await _process_entries(
+        redis,
+        new_entries,
+        stop_event=stop_event,
+    )
+    return next_claim_start_id, processed
+
+
+async def _process_entries(
+    redis: Redis,
+    entries: list[RetryEntry],
+    *,
+    stop_event: asyncio.Event | None = None,
+) -> int:
+    """顺序处理已领取任务，并隔离单条数据库暂时故障。"""
+    processed = 0
+    for entry_id, fields, delivery_count in entries:
+        if stop_event is not None and stop_event.is_set():
+            break
+        try:
+            await process_retry_entry(
+                redis,
+                entry_id,
+                fields,
+                delivery_count=delivery_count,
+            )
+        except SQLAlchemyError:
+            # process_retry_entry 已 rollback 并记录脱敏日志；不 ACK，继续同批任务。
+            pass
+        processed += 1
+    return processed
 
 
 async def _move_to_dead_letter(

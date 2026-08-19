@@ -2,13 +2,14 @@ from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
-from app.core.security import decode_access_token
 from app.core.exceptions import InvalidTokenError
+from app.core.security import decode_access_token
 from app.db.session import get_db
+from app.models.user import User
 from app.repositories.user_repository import UserRepository
 
 oauth2_schema = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
 
 async def get_current_user(
     token: str = Depends(oauth2_schema),
@@ -16,30 +17,28 @@ async def get_current_user(
 ) -> User:
     try:
         user_id = decode_access_token(token)
-    except InvalidTokenError as e:
+    except InvalidTokenError as error:
         raise HTTPException(
-            status_code=401, 
-            detail=str(e),
+            status_code=401,
+            detail=str(error),
             headers={"WWW-Authenticate": "Bearer"},
-        )
-    
+        ) from error
+
     user_repository = UserRepository(session)
     user: User | None = await user_repository.get_by_id(user_id)
 
-    if user is None:
+    if user is None or not user.is_active:
         raise HTTPException(
             status_code=401,
             detail="认证失败",
-            headers={"WWW-Authenticate":"Bearer"},
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user
 
 
 def require_role(*allowed_role: str):
-    async def check_right(
-        user: User = Depends(get_current_user)
-    ) -> User:
+    async def check_right(user: User = Depends(get_current_user)) -> User:
         if user.role not in allowed_role:
             raise HTTPException(
                 status_code=403,

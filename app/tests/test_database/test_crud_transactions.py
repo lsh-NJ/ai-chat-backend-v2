@@ -1,4 +1,3 @@
-from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.db.session import AsyncSessionFactory

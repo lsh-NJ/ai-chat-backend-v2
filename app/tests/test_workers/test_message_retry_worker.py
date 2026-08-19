@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from uuid import uuid4
 
@@ -6,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.workers.message_retry_worker as worker_module
 from app.db.session import AsyncSessionFactory
 from app.models.message import Message
 from app.queue import message_retry_queue as retry_queue
@@ -13,8 +15,9 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.schemas.retry_job import MessageRetryJob
 from app.workers.message_retry_worker import (
     MAX_DELIVERY_ATTEMPTS,
-    reclaim_pending_entries,
     process_retry_entry,
+    reclaim_pending_entries,
+    run_once,
 )
 
 
@@ -372,3 +375,166 @@ async def test_invalid_payload_is_rejected_before_database_path(
     assert dead_letter_fields["source_entry_id"] == entry_id
     assert dead_letter_fields["reason"] == "payload_validation"
     assert dead_letter_fields["error_type"] == "payload_validation"
+
+
+async def test_run_once_processes_reclaimed_and_new_entries(
+    fresh_schema,
+    real_redis,
+    test_user_id: int,
+) -> None:
+    conversation_id = await _create_conversation(test_user_id)
+    pending_job = _job(
+        conversation_id,
+        test_user_id,
+        content="崩溃前已经领取的任务",
+    )
+    new_job = _job(
+        conversation_id,
+        test_user_id,
+        content="尚未领取的新任务",
+    )
+
+    await _deliver_one(real_redis, pending_job)
+    await retry_queue.enqueue_retry_job(real_redis, new_job)
+
+    _, processed = await run_once(
+        real_redis,
+        consumer_name="replacement-worker",
+        claim_min_idle_time_ms=0,
+        read_block_ms=1,
+    )
+
+    assert processed == 2
+    pending = await real_redis.xpending(
+        retry_queue.RETRY_STREAM_KEY,
+        retry_queue.CONSUMER_GROUP_NAME,
+    )
+    assert pending["pending"] == 0
+
+    async with AsyncSessionFactory() as session:
+        stored_contents = list(
+            (
+                await session.scalars(
+                    select(Message.content)
+                    .where(Message.role == "assistant")
+                    .order_by(Message.id)
+                )
+            ).all()
+        )
+    assert stored_contents == [pending_job.content, new_job.content]
+
+
+async def test_run_once_database_failure_does_not_block_same_batch(
+    fresh_schema,
+    real_redis,
+    test_user_id: int,
+    monkeypatch,
+) -> None:
+    conversation_id = await _create_conversation(test_user_id)
+    await retry_queue.ensure_consumer_group(real_redis)
+    await retry_queue.enqueue_retry_job(
+        real_redis,
+        _job(conversation_id, test_user_id, content="暂时失败"),
+    )
+    successful_job = _job(conversation_id, test_user_id, content="同批成功")
+    await retry_queue.enqueue_retry_job(real_redis, successful_job)
+
+    original_process = worker_module.process_retry_entry
+    call_count = 0
+
+    async def fail_first_entry(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise SQLAlchemyError("temporary database failure")
+        return await original_process(*args, **kwargs)
+
+    monkeypatch.setattr(worker_module, "process_retry_entry", fail_first_entry)
+
+    _, processed = await run_once(
+        real_redis,
+        consumer_name="batch-worker",
+        claim_min_idle_time_ms=0,
+        read_block_ms=1,
+    )
+
+    assert processed == 2
+    pending = await real_redis.xpending(
+        retry_queue.RETRY_STREAM_KEY,
+        retry_queue.CONSUMER_GROUP_NAME,
+    )
+    assert pending["pending"] == 1
+    async with AsyncSessionFactory() as session:
+        stored = await session.scalar(
+            select(Message).where(
+                Message.idempotency_key == successful_job.idempotency_key
+            )
+        )
+    assert stored is not None
+
+
+async def test_run_once_propagates_unknown_error(
+    fresh_schema,
+    real_redis,
+    test_user_id: int,
+    monkeypatch,
+) -> None:
+    conversation_id = await _create_conversation(test_user_id)
+    await retry_queue.ensure_consumer_group(real_redis)
+    await retry_queue.enqueue_retry_job(
+        real_redis,
+        _job(conversation_id, test_user_id),
+    )
+
+    async def fail_with_programming_error(*args, **kwargs):
+        raise TypeError("worker implementation bug")
+
+    monkeypatch.setattr(
+        worker_module,
+        "process_retry_entry",
+        fail_with_programming_error,
+    )
+
+    with pytest.raises(TypeError, match="worker implementation bug"):
+        await run_once(
+            real_redis,
+            consumer_name="broken-worker",
+            claim_min_idle_time_ms=0,
+            read_block_ms=1,
+        )
+
+    pending = await real_redis.xpending(
+        retry_queue.RETRY_STREAM_KEY,
+        retry_queue.CONSUMER_GROUP_NAME,
+    )
+    assert pending["pending"] == 1
+
+
+async def test_run_once_does_not_claim_after_stop_requested(
+    fresh_schema,
+    real_redis,
+    test_user_id: int,
+) -> None:
+    conversation_id = await _create_conversation(test_user_id)
+    await retry_queue.ensure_consumer_group(real_redis)
+    await retry_queue.enqueue_retry_job(
+        real_redis,
+        _job(conversation_id, test_user_id),
+    )
+    stop_event = asyncio.Event()
+    stop_event.set()
+
+    next_claim_id, processed = await run_once(
+        real_redis,
+        consumer_name="stopping-worker",
+        stop_event=stop_event,
+        read_block_ms=1,
+    )
+
+    assert next_claim_id == "0-0"
+    assert processed == 0
+    pending = await real_redis.xpending(
+        retry_queue.RETRY_STREAM_KEY,
+        retry_queue.CONSUMER_GROUP_NAME,
+    )
+    assert pending["pending"] == 0

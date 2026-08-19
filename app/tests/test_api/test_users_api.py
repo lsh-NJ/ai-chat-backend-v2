@@ -1,8 +1,8 @@
 import httpx
 
+from app.core.security import create_access_token
 from app.db.session import AsyncSessionFactory
 from app.models.user import User
-from app.core.security import create_access_token
 
 
 async def _register(

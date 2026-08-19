@@ -1,16 +1,17 @@
 import os
-import httpx
 from contextlib import asynccontextmanager
+
+import httpx
 from fastapi import FastAPI
 from sqlalchemy import text
 
+import app.models.user  # noqa: F401  # 注册模型，避免运行期 Mapper 配置失败
+from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
-from app.api.auth import router as auth_router
 from app.api.user import router as user_router
-from app.db.session import engine, close_db
-from app.db.redis import create_redis_client, close_redis
-import app.models.user  # 注册 User 模型，避免运行期 Mapper 配置失败
+from app.db.redis import close_redis, create_redis_client
+from app.db.session import close_db, engine
 
 REDIS_URL = os.environ["REDIS_URL"]
 

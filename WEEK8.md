@@ -28,9 +28,9 @@ API 流式输出
 - [x] Worker 崩溃后能认领 pending 消息并继续处理
 - [x] 超过最大重试次数的任务进入 dead-letter stream
 - [x] `/chat/stream` 保存失败时入队；队列也失败时仍不破坏已发出的响应
-- [ ] Docker Compose 能启动 API、PostgreSQL、Redis 和 Worker
-- [ ] CI 自动运行 lint、类型检查和 pytest
-- [ ] mock LLM 下完成 50 并发压测，记录 P50、P95 和错误率
+- [x] Docker Compose 能启动 API、PostgreSQL、Redis 和 Worker
+- [x] CI 自动运行 lint、类型检查和 pytest
+- [x] mock LLM 下完成 50 并发压测，记录 P50、P95 和错误率
 
 ## 本周暂不加入
 
@@ -91,19 +91,12 @@ load_tests/
 - [x] 原有普通 user/assistant 写入仍可不传幂等键
 - [x] 测试真实 PostgreSQL：重复 key、不同 key、`NULL` key 和并发语义
 
-### 必须亲手写
+### 重要内容
 
-- D-008 的背景、选择、理由和代价
-- Alembic 迁移及 downgrade
-- `MessageRetryJob` 的字段和校验
-- 数据库唯一约束下的幂等写入核心逻辑
-- “重复投递为什么不能靠先 SELECT 再 INSERT”的解释
-
-### 可以由 AI 协助
-
-- 为旧调用点补可选参数
-- 测试数据构造和重复断言
-- 格式整理、类型标注和迁移静态检查
+- D-008 的背景、选择、理由和代价。
+- Alembic 迁移及 downgrade。
+- `MessageRetryJob` 的字段、校验和数据库唯一约束下的幂等写入逻辑。
+- “重复投递为什么不能靠先 SELECT 再 INSERT”的解释。
 
 ### Day 1 验收
 
@@ -146,7 +139,7 @@ load_tests/
 
 ### 任务
 
-- [ ] 将“处理一条任务”和“持续轮询”拆开，核心逻辑可直接测试
+- [x] 将“处理一条任务”和“持续轮询”拆开，核心逻辑可直接测试
 - [x] Worker 为每条任务创建独立 AsyncSession
 - [x] 幂等保存并 commit 成功后执行 `XACK`
 - [x] 数据库失败时不 ACK，让任务保留在 pending
@@ -154,12 +147,12 @@ load_tests/
 - [x] attempt 超过上限后写入 dead-letter stream，再 ACK 原任务
 - [x] 日志包含 job_id、attempt、状态与 error_type，不含正文和异常原文
 
-### 必须亲手写
+### 重要内容
 
-- commit 与 ACK 的顺序
-- 单条任务处理函数
-- pending/reclaim 的状态变化
-- 最大重试次数与死信条件
+- commit 与 ACK 的顺序。
+- 单条任务处理函数与事务边界。
+- pending/reclaim 的状态变化。
+- 最大重试次数与死信条件。
 
 ### Day 3 验收
 
@@ -179,8 +172,8 @@ load_tests/
 - [x] 首次保存与重试任务使用同一个 key，覆盖“提交结果不确定”场景
 - [x] 保存失败后入队；入队失败只记录脱敏日志，不破坏已发出的响应
 - [x] 为 API、Worker 日志加入可关联的 `job_id`
-- [ ] 增加 Dockerfile，并在 Compose 中加入 API 和 Worker 服务
-- [ ] Worker 支持 SIGTERM/KeyboardInterrupt 优雅停止
+- [x] 增加 Dockerfile，并在 Compose 中加入 API 和 Worker 服务
+- [x] Worker 支持 SIGTERM/KeyboardInterrupt 优雅停止
 - [x] 补齐失败矩阵测试
 
 ### 第二阶段细则：Worker 运行入口
@@ -205,12 +198,12 @@ Worker 分成三层，不能把业务处理、轮询和进程生命周期塞进�
 
 #### 运行入口验收
 
-- [ ] `run_once()` 可在测试中有限执行并同时处理 reclaimed 与新任务
-- [ ] 单条数据库暂时故障保留 pending，但不阻断同批其他任务
-- [ ] 未知异常继续抛出，不被轮询层吞掉
-- [ ] stop event 设置后不再领取新任务，当前任务可以完成
-- [ ] Redis 暂时不可用时退避，避免 CPU 空转和日志风暴
-- [ ] runner 退出时关闭 Redis 客户端和 SQLAlchemy engine
+- [x] `run_once()` 可在测试中有限执行并同时处理 reclaimed 与新任务
+- [x] 单条数据库暂时故障保留 pending，但不阻断同批其他任务
+- [x] 未知异常继续抛出，不被轮询层吞掉
+- [x] stop event 设置后不再领取新任务，当前任务可以完成
+- [x] Redis 暂时不可用时退避，避免 CPU 空转和日志风暴
+- [x] runner 退出时关闭 Redis 客户端和 SQLAlchemy engine
 
 ### 失败矩阵
 
@@ -226,22 +219,143 @@ Worker 分成三层，不能把业务处理、轮询和进程生命周期塞进�
 - [x] 保存失败且入队成功时，Worker 最终补齐历史消息
 - [x] 队列失败不会把 StreamingResponse 弄断
 - [x] 重复任务不会产生重复消息
-- [ ] `docker compose up` 能启动 API、PostgreSQL、Redis、Worker
+- [x] `docker compose up` 能启动 API、PostgreSQL、Redis、Worker
+
+### 部署验收证据
+
+- `docker compose config --quiet` 通过。
+- 同一应用镜像分别运行 `alembic upgrade head`、Uvicorn API 和 Retry Worker。
+- migration 容器以退出码 0 完成，数据库处于 `b18f6a4d2c90 (head)`。
+- API `/health` 返回 `{"status":"ok"}`，Compose healthcheck 为 healthy。
+- Worker 收到 SIGTERM 后在 5 秒内以退出码 0 停止，随后可重新启动。
+- migration 只获得数据库环境；Worker 只获得数据库和 Redis 环境，不注入 JWT 或 LLM API key。
+- Docker Hub 拉取曾发生网络超时；本机使用同版本的缓存镜像覆盖 `PYTHON_IMAGE` 完成构建验证。默认仍使用官方 `python:3.12-slim`，正式 CI 需要再次验证默认镜像来源。
 
 ---
 
 ## Day 5：质量门禁、压测与 Week 5～8 封板
 
+### 第一阶段细则：质量门禁架构
+
+先完成可快速反馈、可在干净环境复现的质量流水线，压测和项目复盘在本阶段验收后再细化。
+
+质量门禁分为四层：
+
+1. `ruff`：处理格式、导入和常见静态错误，提供秒级反馈。
+2. `pyright`：检查应用代码的跨模块类型契约，测试代码暂不作为严格类型门禁。
+3. `pytest + coverage`：使用真实 `_test` PostgreSQL 和 Redis DB 15，覆盖率低于 70% 时失败。
+4. `pre-commit + CI`：pre-commit 提供提交前快速检查；CI 在全新 Python 环境与独立服务中执行权威验收。
+
+生产依赖和开发依赖必须分开：Docker 镜像只安装应用运行依赖；pytest、coverage、ruff、pyright 和 pre-commit 只进入开发/CI 依赖。CI 不读取本地 `.env`，必须显式声明测试数据库与 Redis 地址，并继续通过现有 fail-closed fixture 校验。
+
+#### 重要内容
+
+- 为什么本地检查追求快速反馈，而 CI 才是干净环境中的权威结果。
+- 为什么“测试时临时覆盖开发数据库变量”不是可靠隔离，CI 必须从结构上只提供测试库。
+- 为什么 lint、type check 和 test 解决的是三类不同问题，不能互相替代。
+- 为什么生产镜像不应携带 pytest、pre-commit 等开发工具。
+- 为什么覆盖率只是未测试代码的线索，不能直接代表测试质量。
+
+#### 第一阶段验收
+
+- [x] `ruff check .` 通过
+- [x] `pyright app` 通过，严格检查范围不包含测试目录
+- [x] `pytest --cov` 通过且总覆盖率不低于 70%
+- [x] `pre-commit run --all-files` 通过
+- [x] CI 使用 PostgreSQL `_test` 数据库与 Redis DB 15，依赖不可用时失败
+- [x] CI 不读取或自动回退到开发数据库、开发 Redis 和真实 LLM API
+- [x] 生产镜像不包含 pytest、coverage、ruff、pyright 或 pre-commit
+
+#### 第一阶段验收证据
+
+- `ruff check .`：通过。
+- `pyright app`：`0 errors, 0 warnings, 0 informations`。
+- `pytest --cov`：129 个测试通过，总覆盖率 91.85%，分支覆盖已启用。
+- `pre-commit run --all-files`：Ruff 与 Pyright hooks 均通过。
+- CI 显式启动 `chat_v2_test` PostgreSQL 和 Redis，并只向测试进程提供 Redis DB 15 作为测试地址；现有 fixture 会在环境错误或依赖不可用时 fail-closed。
+- 生产镜像从 `requirements.txt` 构建；一次性容器确认 pytest、coverage、Ruff、Pyright 与 pre-commit 均不存在。
+
 ### 任务
 
-- [ ] 配置 ruff、pyright 或 mypy、pytest coverage 和 pre-commit
-- [ ] CI 自动执行 lint、type check、test，且不连接开发数据库/Redis
-- [ ] mock LLM 下做 50 并发压测，不把真实模型延迟混入结果
-- [ ] 记录 P50、P95、吞吐量、错误率和测试环境
-- [ ] 目标错误率低于 1%；未达到时给出瓶颈和下一步，而不是修改数据
-- [ ] 更新 README：完整 Compose、Worker、失败恢复和压测命令
-- [ ] 写 `v1-to-v2.md`：列出 v1 的问题、v2 的设计变化、证据和剩余债务
-- [ ] 完成一次 45～60 分钟项目答辩并准备简历 v0
+- [x] 配置 ruff、pyright、pytest coverage 和 pre-commit
+- [x] CI 自动执行 lint、type check、test，且不连接开发数据库/Redis
+- [x] mock LLM 下做 50 并发压测，不把真实模型延迟混入结果
+- [x] 记录 P50、P95、吞吐量、错误率和测试环境
+- [x] 目标错误率低于 1%；未达到时给出瓶颈和下一步，而不是修改数据
+- [x] 更新 README：完整 Compose、Worker、失败恢复和压测命令
+- [x] 写 `v1-to-v2.md`：列出 v1 的问题、v2 的设计变化、证据和剩余债务
+- [x] 准备 45～60 分钟项目答辩材料和简历 v0
+- [ ] 不看材料完成一次真实项目答辩
+
+### 第二阶段细则：隔离环境下的 50 并发压测
+
+本阶段只测当前系统自身的链路：Locust → API → PostgreSQL / Redis → mock LLM。mock LLM 仍通过真实 HTTP 接口提供普通 JSON 和 SSE 流式响应，但使用固定内容与固定延迟，避免把真实模型的网络波动、限流和费用混入后端数据。
+
+压测必须使用独立的 Compose project、独立 volume 和名称以 `_test` 结尾的 `chat_v2_load_test` 数据库。不能通过运行前临时修改开发环境变量来“保证安全”，也不能复用开发数据库后再人工清理。
+
+50 个虚拟用户各自注册并登录，准备请求不计入聊天指标。每个聊天请求创建新会话，使每个样本的历史规模一致；`/chat` 与 `/chat/stream` 分开统计。流式接口当前记录的是收到完整响应的总耗时，不把它误称为首 token 延迟。
+
+#### 重要内容
+
+- 并发用户数、请求吞吐量和响应时间分别描述什么，为什么不能互相替代。
+- P50 代表典型体验，P95 用于观察尾延迟；只看平均值为什么会隐藏少量慢请求。
+- 为什么压测必须固定 LLM 行为、测试数据和运行时长，才能进行前后对比。
+- 为什么负载测试不能接触开发库或生产库，隔离必须由 Compose project、数据库名和 volume 共同保证。
+- 为什么错误率不能只看 HTTP 500，还要校验响应结构和业务结果。
+- 为什么一次本机短压测只能作为基线，不能直接推导生产容量。
+
+#### 第二阶段验收
+
+- [x] mock LLM 同时支持普通响应和带 `[DONE]` 的 SSE 流式响应
+- [x] 压测栈只连接 `chat_v2_load_test`，与开发 Compose project 和 volume 隔离
+- [x] 50 个并发用户运行至少 30 秒，普通与流式聊天分别有样本
+- [x] 记录每个接口的请求数、P50、P95、吞吐量和错误率
+- [x] 校验响应状态、JSON 字段、会话 ID 和流式正文，而不只判断 HTTP 状态码
+- [x] 错误率低于 1%；若失败则保留真实结果并定位瓶颈
+- [x] 运行结束后可删除临时数据库 volume，报告文件仍保留
+
+#### 第二阶段验收证据
+
+- 50 用户、10 用户/秒启动、40 秒运行；普通与流式接口权重各 1。
+- 共完成 2,702 次聊天，失败 0 次，聚合吞吐量 67.98 RPS。
+- `/chat`：P50 150 ms，P95 370 ms；`/chat/stream`：P50 150 ms，P95 380 ms。
+- 数据库中 2,702 个会话、5,404 条完整消息；retry 和 dead-letter stream 均为空。
+- 详细环境、边界、原始指标解释和后续实验见 `load_tests/REPORT.md`。
+
+### 第三阶段细则：项目封板、安全审计与答辩准备
+
+本阶段不再增加业务功能，而是把“能运行的代码”整理成别人能够启动、审查、追问和复现的工程交付。文档必须同时写成功路径、失败边界、量化证据和剩余债务，不能只写技术栈列表。
+
+安全审计发现问题时先修复再下结论：已经发布的 migration 不允许回改；示例密钥不能成为可直接启动的弱默认值；迁移占位身份必须由账户状态禁止登录。审计结论必须明确覆盖范围，不能把一次代码检查包装成渗透测试或生产安全认证。
+
+#### 重要内容
+
+- README、ADR、复盘报告和代码分别服务什么读者，为什么不能互相替代。
+- 为什么架构复盘必须写替代方案、代价和证据，而不只是“v2 技术更多”。
+- 为什么发现 schema drift 后应追加兼容迁移，而不是改历史 revision 或手工修库。
+- 为什么安全审计的专业表现是明确剩余风险，而不是宣称“系统绝对安全”。
+- 为什么简历指标必须带测试条件，不能把本机基线写成生产最大容量。
+- 为什么准备了答辩答案不等于已经掌握，最终仍要脱离文档完成口头推演。
+
+#### 第三阶段验收
+
+- [x] README 包含完整 Compose、本地开发、Worker、失败恢复、门禁和压测命令
+- [x] `v1-to-v2.md` 基于真实 v1 代码列出变化、证据、代价与剩余债务
+- [x] 当前工作树密钥、认证、越权、日志、迁移、测试隔离和生产镜像完成审计
+- [x] 迁移占位用户已禁用，密码与旧 JWT 均无法绕过
+- [x] 发现并用追加 revision 修复开发库 `is_completed/is_complete` schema drift
+- [x] 准备 45～60 分钟答辩提纲、故障推演题和简历 v0
+- [ ] 不看答案完成一次真实口头答辩并达到 70 分
+
+#### 第三阶段验收证据
+
+- 新增 D-009 与 `c7d8e9f0a1b2`，为用户增加 `is_active` 并禁用迁移回填账户。
+- 新增 D-010 与 `d8e9f0a1b2c3`，旧列名存在时原地修复，规范结构下 no-op，歧义结构 fail-closed。
+- `alembic current / heads / check` 一致，输出 `No new upgrade operations detected`。
+- 129 个测试通过，覆盖率 91.85%；Ruff、Pyright、pre-commit 和 `pip check` 通过。
+- `.env.example` 的关键密钥为空，未填写时 Compose 配置阶段拒绝运行。
+- 生产镜像以非 root 运行，且不包含 pytest、coverage、Ruff、Pyright 或 pre-commit。
+- 详细风险与剩余项见 `SECURITY_AUDIT.md`；答辩材料见 `PROJECT_DEFENSE.md`。
 
 ### 最终验收命令
 
@@ -258,13 +372,21 @@ git status --short
 
 ### Week 8 完成定义
 
-- [ ] API 保存失败后存在可验证的补偿路径
-- [ ] 消费语义明确为 at-least-once，重复投递由数据库幂等处理
-- [ ] Worker 崩溃、数据库失败、Redis 失败均有测试
-- [ ] Docker Compose 包含完整运行组件
-- [ ] CI、覆盖率和 50 并发报告可复现
-- [ ] 代码、迁移、日志、密钥和测试环境通过安全审计
-- [ ] 能解释 ACK、pending、reclaim、dead letter、幂等和重试风暴
+- [x] API 保存失败后存在可验证的补偿路径
+- [x] 消费语义明确为 at-least-once，重复投递由数据库幂等处理
+- [x] Worker 崩溃、数据库失败、Redis 失败均有测试
+- [x] Docker Compose 包含完整运行组件
+- [x] CI、覆盖率和 50 并发报告可复现
+- [x] 代码、迁移、日志、密钥和测试环境通过安全审计
+- [ ] 能脱离材料完整解释 ACK、pending、reclaim、dead letter、幂等和重试风暴（后续复习项，不阻断进入 Week 9）
+
+### 最终验收结论（2026-08-19）
+
+- **工程验收：通过。** 功能、失败路径、迁移、测试隔离、质量门禁、容器运行、压测、文档和安全审计均有可复现证据。
+- **答辩材料验收：通过。** `PROJECT_DEFENSE.md` 已覆盖主要架构、关键链路、故障路径、证据、局限与后续方向，可以作为完整的项目答辩材料。
+- **真实口头答辩：尚未验证。** 本周没有实际进行一次脱离材料的完整口头答辩，因此不把“材料质量”直接等同于“现场表达已经验收”；这项只作为后续穿插练习，不阻断 Week 9。
+- **进度决定：Week 8 验收结束，可以进入 Week 9。** 答辩缺口保留为后续穿插复习，不通过伪造勾选掩盖，也不继续占用本周工程主线。
+- **需要带入后续的习惯：** 每新增一个 LLM 能力，都要同时回答它的组件边界、状态来源、失败行为、观测证据和仍未解决的问题。
 
 ## 必须能回答
 
@@ -278,4 +400,4 @@ git status --short
 
 ## Week 9 衔接
 
-Week 9 进入 LLM 原理与 API 工程：provider adapter、tokenizer、token-aware 上下文预算、结构化输出和回归样例。Week 8 不提前展开这些内容。
+Week 9 进入 LLM 原理与 API 工程的第一阶段：先建立 provider adapter，再完成 tokenizer 与 token-aware 上下文预算，并建立第一批回归样例。结构化输出留到后续周次展开，Week 8 不提前展开这些内容。

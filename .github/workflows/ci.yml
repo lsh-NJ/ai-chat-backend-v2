@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DRIVER: postgresql+asyncpg
+      POSTGRES_USER: chat_app
+      POSTGRES_PASSWORD: ci-only-database-password
+      POSTGRES_DB: chat_v2_test
+      POSTGRES_TEST_DB: chat_v2_test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://localhost:6379/0
+      REDIS_TEST_URL: redis://localhost:6379/15
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters
+      DEEPSEEK_API_KEY: ci-does-not-call-real-llm
+      DEEPSEEK_BASE_URL: https://example.invalid
+      DEEPSEEK_MODEL: ci-mock-model
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: chat_app
+          POSTGRES_PASSWORD: ci-only-database-password
+          POSTGRES_DB: chat_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chat_app -d chat_v2_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install development dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: .venv/bin/ruff check .
+
+      - name: Type check
+        run: .venv/bin/pyright app
+
+      - name: Test with coverage
+        run: >-
+          .venv/bin/pytest -q
+          --cov=app
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=70
+
+      - name: Build production image
+        run: docker build --tag ai-chat-backend-v2:ci .
+
+      - name: Verify production image excludes development tools
+        run: >-
+          docker run --rm --entrypoint python ai-chat-backend-v2:ci
+          -c "import importlib.util;
+          assert all(importlib.util.find_spec(name) is None
+          for name in ('pytest', 'coverage', 'ruff', 'pyright', 'pre_commit'))"

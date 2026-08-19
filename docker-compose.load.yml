@@ -1,0 +1,71 @@
+name: ai-chat-v2-load
+
+services:
+  db:
+    environment:
+      POSTGRES_DB: chat_v2_load_test
+
+  migrate:
+    environment:
+      POSTGRES_DB: chat_v2_load_test
+
+  api:
+    environment:
+      POSTGRES_DB: chat_v2_load_test
+      DEEPSEEK_API_KEY: load-test-only-mock-key
+      DEEPSEEK_BASE_URL: http://mock-llm:8081
+      DEEPSEEK_MODEL: mock-chat
+    depends_on:
+      mock-llm:
+        condition: service_healthy
+
+  worker:
+    environment:
+      POSTGRES_DB: chat_v2_load_test
+
+  mock-llm:
+    build:
+      context: .
+      dockerfile: load_tests/Dockerfile.mock
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+    environment:
+      MOCK_LLM_DELAY_MS: ${MOCK_LLM_DELAY_MS:-30}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=2)
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  load-test:
+    build:
+      context: .
+      dockerfile: load_tests/Dockerfile.locust
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
+    command:
+      - --host
+      - http://api:8000
+      - --headless
+      - --users
+      - ${LOAD_USERS:-50}
+      - --spawn-rate
+      - ${LOAD_SPAWN_RATE:-10}
+      - --run-time
+      - ${LOAD_RUN_TIME:-40s}
+      - --stop-timeout
+      - "5"
+      - --csv
+      - /results/week8
+      - --only-summary
+    volumes:
+      - ./load_tests/results:/results
+    depends_on:
+      api:
+        condition: service_healthy

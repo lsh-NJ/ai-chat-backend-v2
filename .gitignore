@@ -3,4 +3,11 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.pyright/
+.ruff_cache/
+load_tests/results/*
+!load_tests/results/.gitkeep
 .DS_Store

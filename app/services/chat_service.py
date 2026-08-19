@@ -8,16 +8,15 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.llm_service import call_llm, stream_llm
-from app.models.conversation import Conversation
+from app.core.exceptions import ConversationNotFoundError, LLMServiceError
 from app.models.message import Message
+from app.queue.message_retry_queue import enqueue_retry_job
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
 from app.schemas.chat import ChatResponse
 from app.schemas.retry_job import MessageRetryJob
-from app.core.exceptions import LLMServiceError, ConversationNotFoundError
-from app.queue.message_retry_queue import enqueue_retry_job
 from app.services.conversation_service import create_conversation
+from app.services.llm_service import call_llm, stream_llm
 
 logger = logging.getLogger("app")
 

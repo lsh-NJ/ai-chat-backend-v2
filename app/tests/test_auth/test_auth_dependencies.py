@@ -1,16 +1,17 @@
 import os
-import pytest
-import jwt 
-from dotenv import load_dotenv
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
-from app.repositories.user_repository import UserRepository
-from app.repositories.conversation_repository import ConversationRepository
+import jwt
+import pytest
+from dotenv import load_dotenv
+
+from app.core.deps import get_current_user
+from app.core.exceptions import InvalidTokenError
+from app.core.security import create_access_token, decode_access_token
 from app.db.session import AsyncSessionFactory
 from app.models.user import User
-from app.core.deps import get_current_user
-from app.core.security import create_access_token, decode_access_token
-from app.core.exceptions import InvalidTokenError
+from app.repositories.conversation_repository import ConversationRepository
+from app.repositories.user_repository import UserRepository
 
 load_dotenv()
 JWT_SECRET = os.environ["JWT_SECRET"]
@@ -24,9 +25,10 @@ async def test_create_token_valid():
 async def test_token_expired():
     token = create_access_token(1, -1)
 
-    with pytest.raises(InvalidTokenError) as e:
-        user_id: int = decode_access_token(token)
-        assert str(e) == "认证超时"
+    with pytest.raises(InvalidTokenError) as exc_info:
+        decode_access_token(token)
+
+    assert str(exc_info.value) == "认证超时"
 
 
 async def test_fake_secret_token():
@@ -72,11 +74,11 @@ async def test_auth(create_test_user):
 
     async with AsyncSessionFactory() as session:
         conversation_repository = ConversationRepository(session)
-        conversation_id1 = await conversation_repository.create(
+        await conversation_repository.create(
             title="用户 1",
-            user_id = user1.id,
+            user_id=user1.id,
         )
-        conversation_id2 = await conversation_repository.create(
+        await conversation_repository.create(
             title="用户 2",
             user_id=user2.id,
         )

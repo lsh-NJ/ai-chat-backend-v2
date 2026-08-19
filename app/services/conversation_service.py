@@ -1,16 +1,17 @@
 import json
 import logging
+
 from pydantic import ValidationError
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConversationNotFoundError
-from app.schemas.conversation import ConversationOut
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.repositories.conversation_repository import ConversationRepository
 from app.repositories.message_repository import MessageRepository
+from app.schemas.conversation import ConversationOut
 
 logger = logging.getLogger("app")
 CONVERSATION_LIST_CACHE_TTL_SECONDS = 60

@@ -1,16 +1,19 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     BigInteger,
+    Boolean,
+    CheckConstraint,
     DateTime,
     Identity,
     String,
-    CheckConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
 if TYPE_CHECKING:
     from app.models.conversation import Conversation
 
@@ -46,6 +49,13 @@ class User(Base):
         nullable=False,
         default="user",
         server_default="user",
+    )
+
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
     )
 
     created_at: Mapped[datetime] = mapped_column(

@@ -1,14 +1,12 @@
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    BigInteger, 
-    DateTime, 
-    Identity, 
-    String,
+    BigInteger,
+    DateTime,
     ForeignKey,
-    CheckConstraint,
+    Identity,
     Index,
+    String,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship

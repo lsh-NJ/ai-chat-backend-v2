@@ -4,7 +4,6 @@ from typing import TypeAlias
 
 from redis.typing import EncodableT
 
-
 # Redis commands accept these values when writing hashes or Stream entries.
 RedisFields: TypeAlias = dict[EncodableT, EncodableT]
 

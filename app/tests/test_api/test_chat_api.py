@@ -1,5 +1,3 @@
-import httpx
-import pytest
 from sqlalchemy import select
 
 from app.core.exceptions import (

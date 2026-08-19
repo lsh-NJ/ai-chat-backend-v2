@@ -1,13 +1,15 @@
-import os
-import httpx
-from unittest.mock import AsyncMock
-from pathlib import Path
-from urllib.parse import urlparse
-from sqlalchemy import text
 import asyncio
-from dotenv import load_dotenv
-from alembic import command
+import os
+from pathlib import Path
+from unittest.mock import AsyncMock
+from urllib.parse import urlparse
+
+import httpx
 from alembic.config import Config
+from dotenv import load_dotenv
+from sqlalchemy import text
+
+from alembic import command
 
 load_dotenv()
 os.environ["POSTGRES_DB"] = os.environ["POSTGRES_TEST_DB"]
@@ -37,12 +39,11 @@ if not os.environ["POSTGRES_DB"].endswith("_test"):
 
 import pytest  # noqa: E402
 
-from app.main import app
+from app.core.security import create_access_token  # noqa: E402
 from app.db.redis import close_redis, create_redis_client  # noqa: E402
 from app.db.session import AsyncSessionFactory, engine, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 from app.models.user import User  # noqa: E402
-from app.core.security import create_access_token  # noqa: E402
-
 
 # 这是一个固定的有效 bcrypt 哈希，只用于构造不关心密码流程的测试用户。
 # 注册/登录测试仍会调用真实的 hash_password / verify_password。

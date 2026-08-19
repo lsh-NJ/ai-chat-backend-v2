@@ -20,7 +20,6 @@ from app.repositories.conversation_repository import ConversationRepository
 from app.services import chat_service
 from app.workers.message_retry_worker import process_retry_entry
 
-
 # 40 个汉字，用于验证标题只取前 30 字
 LONG_MESSAGE = "一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五"
 

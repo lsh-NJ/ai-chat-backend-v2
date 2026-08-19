@@ -6,7 +6,6 @@ from redis.exceptions import ResponseError
 from app.core.types import RedisDecodedFields, RedisFields
 from app.schemas.retry_job import MessageRetryJob
 
-
 RETRY_STREAM_KEY = "message-retry:v1"
 DEAD_LETTER_STREAM_KEY = "message-retry:dead-letter:v1"
 CONSUMER_GROUP_NAME = "message-retry-workers:v1"

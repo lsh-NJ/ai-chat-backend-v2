@@ -1,17 +1,18 @@
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
 
-from app.models.user import User
-from app.core.security import(
-    hash_password,
-    verify_password,
-)
-from app.repositories.user_repository import UserRepository
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.exceptions import (
     UsernameAlreadyExistsError,
     UsernameOrPasswordError,
 )
+from app.core.security import (
+    hash_password,
+    verify_password,
+)
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
 
 
 async def register(
@@ -45,7 +46,7 @@ async def login(
     user_repository = UserRepository(session)
     user: User | None = await user_repository.get_by_username(username)
 
-    if user is None:
+    if user is None or not user.is_active:
         raise UsernameOrPasswordError()
     if not await asyncio.to_thread(
         verify_password,
@@ -55,4 +56,3 @@ async def login(
         raise UsernameOrPasswordError()
 
     return user
-
