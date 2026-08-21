@@ -53,7 +53,7 @@ async def chat(
             session=session,
             conversation_id=chat_request.conversation_id,
             message=chat_request.message,
-            client=request.app.state.http_client,
+            provider=request.app.state.llm_provider,
             user_id=current_user.id,
             redis=redis,
         )
@@ -85,7 +85,7 @@ async def chat_stream(
         conversation_id, chat_stream_result = await chat_service.chat_stream(
             conversation_id=chat_request.conversation_id,
             message=chat_request.message,
-            client=request.app.state.http_client,
+            provider=request.app.state.llm_provider,
             session=session,
             user_id=current_user.id,
             redis=redis,

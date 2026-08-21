@@ -6,9 +6,9 @@ from app.core.exceptions import (
     LLMUpstreamError,
 )
 from app.db.session import AsyncSessionFactory
+from app.llm.contracts import LLMRole
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.services import chat_service
 
 
 async def _messages_of(session, conversation_id: int) -> list[Message]:
@@ -24,13 +24,8 @@ async def _messages_of(session, conversation_id: int) -> list[Message]:
 async def test_chat_nonexistent_conversation_returns_404(
     client,
     auth_headers,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_call_llm(client, messages):
-        raise AssertionError("不存在的会话不应该走到 LLM 调用")
-
-    monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
-
     response = await client.post(
         "/chat",
         json={"conversation_id": 999999, "message": "你好"},
@@ -39,6 +34,7 @@ async def test_chat_nonexistent_conversation_returns_404(
 
     assert response.status_code == 404
     assert "999999" in response.json()["detail"]
+    assert llm_provider.complete_calls == []
 
 
 # 历史消息接口查询不存在的会话 → 404
@@ -53,11 +49,11 @@ async def test_history_missing_conversation_returns_404(client, auth_headers):
 
 
 # LLM 超时 → 504
-async def test_chat_llm_timeout_returns_504(client, auth_headers, monkeypatch):
-    async def fake_timeout(client, messages):
+async def test_chat_llm_timeout_returns_504(client, auth_headers, llm_provider):
+    async def fake_timeout(messages):
         raise LLMTimeoutError("LLM request timeout")
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_timeout)
+    llm_provider.complete_handler = fake_timeout
 
     response = await client.post(
         "/chat",
@@ -70,11 +66,15 @@ async def test_chat_llm_timeout_returns_504(client, auth_headers, monkeypatch):
 
 
 # LLM 上游错误 → 502
-async def test_chat_llm_upstream_error_returns_502(client, auth_headers, monkeypatch):
-    async def fake_upstream(client, messages):
+async def test_chat_llm_upstream_error_returns_502(
+    client,
+    auth_headers,
+    llm_provider,
+):
+    async def fake_upstream(messages):
         raise LLMUpstreamError("LLM API returned status 500")
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_upstream)
+    llm_provider.complete_handler = fake_upstream
 
     response = await client.post(
         "/chat",
@@ -90,12 +90,12 @@ async def test_chat_llm_upstream_error_returns_502(client, auth_headers, monkeyp
 async def test_chat_llm_configuration_error_returns_500(
     client,
     auth_headers,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_config(client, messages):
+    async def fake_config(messages):
         raise LLMConfigurationError("缺少 LLM 配置环境变量: DEEPSEEK_API_KEY")
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_config)
+    llm_provider.complete_handler = fake_config
 
     response = await client.post(
         "/chat",
@@ -111,13 +111,15 @@ async def test_chat_llm_configuration_error_returns_500(
 async def test_chat_success_returns_reply_and_persists_messages(
     client,
     auth_headers,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_call_llm(client, messages):
-        assert messages[-1] == {"role": "user", "content": "你好"}
+    async def fake_complete(messages):
+        assert messages[0].role == LLMRole.SYSTEM
+        assert messages[-1].role == LLMRole.USER
+        assert messages[-1].content == "你好"
         return "你好，我是模拟模型。"
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
+    llm_provider.complete_handler = fake_complete
 
     response = await client.post(
         "/chat",
@@ -147,13 +149,15 @@ async def test_chat_success_returns_reply_and_persists_messages(
 async def test_chat_stream_success_returns_full_response(
     client,
     auth_headers,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
+        assert messages[0].role == LLMRole.SYSTEM
+        assert messages[-1].role == LLMRole.USER
         yield "你好"
         yield "，世界。"
 
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
 
     response = await client.post(
         "/chat/stream",

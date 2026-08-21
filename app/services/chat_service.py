@@ -2,13 +2,13 @@ import logging
 from collections.abc import AsyncIterator
 from uuid import UUID, uuid4
 
-import httpx
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConversationNotFoundError, LLMServiceError
+from app.llm.contracts import LLMMessage, LLMProvider, LLMRole
 from app.models.message import Message
 from app.queue.message_retry_queue import enqueue_retry_job
 from app.repositories.conversation_repository import ConversationRepository
@@ -16,9 +16,13 @@ from app.repositories.message_repository import MessageRepository
 from app.schemas.chat import ChatResponse
 from app.schemas.retry_job import MessageRetryJob
 from app.services.conversation_service import create_conversation
-from app.services.llm_service import call_llm, stream_llm
 
 logger = logging.getLogger("app")
+
+SYSTEM_MESSAGE = LLMMessage(
+    role=LLMRole.SYSTEM,
+    content="你是一个简洁、友好、可靠的 AI 助手。",
+)
 
 async def save_message(
     session: AsyncSession,
@@ -116,20 +120,16 @@ async def get_history_message(
     session: AsyncSession,
     conversation_id: int, 
     limit: int = 20,
-) -> list[dict[str, str]]:
+) -> list[LLMMessage]:
     message = MessageRepository(session)
     messages: list[Message] = await message.list_by_conversation(conversation_id, limit)
     return [
-        {
-            "role": message.role,
-            "content":message.content,
-        }
-
+        LLMMessage(role=LLMRole(message.role), content=message.content)
         for message in messages
     ]
 
 async def chat(
-    client: httpx.AsyncClient,
+    provider: LLMProvider,
     session: AsyncSession,
     conversation_id: int | None,
     message: str,
@@ -167,10 +167,7 @@ async def chat(
         limit=20,
     )
 
-    reply = await call_llm(
-        client=client,
-        messages=history_messages,
-    )
+    reply = await provider.complete([SYSTEM_MESSAGE, *history_messages])
     await save_message(
         session=session,
         conversation_id=conversation_id,
@@ -186,7 +183,7 @@ async def chat(
 
 
 async def chat_stream(
-    client: httpx.AsyncClient,
+    provider: LLMProvider,
     session: AsyncSession,
     conversation_id: int | None,
     message: str,
@@ -225,9 +222,8 @@ async def chat_stream(
     )
 
     # async generator 不能 await
-    llm_chunks: AsyncIterator[str] = stream_llm(
-        client=client,
-        messages=history_messages,
+    llm_chunks: AsyncIterator[str] = provider.stream(
+        [SYSTEM_MESSAGE, *history_messages]
     )
 
     fully_parts: list[str] = []

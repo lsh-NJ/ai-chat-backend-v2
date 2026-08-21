@@ -3,7 +3,6 @@ import pytest
 from app.core.security import create_access_token
 from app.db.session import AsyncSessionFactory
 from app.models.user import User
-from app.services import chat_service
 
 
 async def _create_user_headers(
@@ -88,15 +87,9 @@ async def test_users_cannot_read_each_others_conversations(client, create_test_u
 async def test_users_cannot_chat_in_each_others_conversations(
     client,
     create_test_user,
-    monkeypatch,
+    llm_provider,
     path,
 ):
-    async def llm_must_not_run(*args, **kwargs):
-        raise AssertionError("越权请求不应该调用 LLM")
-
-    monkeypatch.setattr(chat_service, "call_llm", llm_must_not_run)
-    monkeypatch.setattr(chat_service, "stream_llm", llm_must_not_run)
-
     owner_headers = await _create_user_headers(create_test_user, "chat-owner")
     other_headers = await _create_user_headers(create_test_user, "chat-other")
 
@@ -115,3 +108,5 @@ async def test_users_cannot_chat_in_each_others_conversations(
     )
 
     assert response.status_code == 404
+    assert llm_provider.complete_calls == []
+    assert llm_provider.stream_calls == []

@@ -42,8 +42,9 @@ import pytest  # noqa: E402
 from app.core.security import create_access_token  # noqa: E402
 from app.db.redis import close_redis, create_redis_client  # noqa: E402
 from app.db.session import AsyncSessionFactory, engine, get_db  # noqa: E402
-from app.main import app  # noqa: E402
+from app.main import create_app  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.tests.fakes import FakeLLMProvider  # noqa: E402
 
 # 这是一个固定的有效 bcrypt 哈希，只用于构造不关心密码流程的测试用户。
 # 注册/登录测试仍会调用真实的 hash_password / verify_password。
@@ -131,25 +132,32 @@ def redis_client() -> AsyncMock:
 
 
 @pytest.fixture
+def llm_provider() -> FakeLLMProvider:
+    """测试必须显式注入 provider，绝不自动连接真实模型。"""
+    return FakeLLMProvider()
+
+
+@pytest.fixture
 async def redis_test_client(fresh_schema, real_redis):
     """缓存集成测试使用的真实 Redis；fresh_schema 已完成清理。"""
     return real_redis
 
 
 @pytest.fixture
-async def client(fresh_schema, redis_client):
+async def client(fresh_schema, redis_client, llm_provider):
     async def override_get_db():
         async with AsyncSessionFactory() as session:
             yield session
 
-    app.dependency_overrides[get_db] = override_get_db
-    async with app.router.lifespan_context(app):
+    test_app = create_app(llm_provider=llm_provider)
+    test_app.dependency_overrides[get_db] = override_get_db
+    async with test_app.router.lifespan_context(test_app):
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
+            transport=httpx.ASGITransport(app=test_app),
             base_url="http://testserver",
         ) as test_client:
             yield test_client
-    app.dependency_overrides.clear()
+    test_app.dependency_overrides.clear()
 
 
 @pytest.fixture

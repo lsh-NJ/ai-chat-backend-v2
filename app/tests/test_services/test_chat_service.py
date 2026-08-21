@@ -1,7 +1,6 @@
 import logging
 from uuid import uuid4
 
-import httpx
 import pytest
 from redis.exceptions import RedisError
 from sqlalchemy import func, select
@@ -13,6 +12,7 @@ from app.core.exceptions import (
     LLMTimeoutError,
 )
 from app.db.session import AsyncSessionFactory
+from app.llm.contracts import LLMRole
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.queue import message_retry_queue as retry_queue
@@ -42,24 +42,25 @@ async def _messages_of(session, conversation_id: int) -> list[Message]:
 
 # 目标：chat 无会话时自动创建会话，并保存 user + assistant 两条消息
 async def test_chat_creates_conversation_and_saves_messages(
-    fresh_schema, test_user_id, redis_client, monkeypatch,
+    fresh_schema, test_user_id, redis_client, llm_provider,
 ):
-    async def fake_call_llm(client, messages):
-        assert messages[-1] == {"role": "user", "content": "你好"}
+    async def fake_complete(messages):
+        assert messages[0].role == LLMRole.SYSTEM
+        assert messages[-1].role == LLMRole.USER
+        assert messages[-1].content == "你好"
         return "你好，我是模拟模型。"
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
+    llm_provider.complete_handler = fake_complete
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            result = await chat_service.chat(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
+    async with AsyncSessionFactory() as session:
+        result = await chat_service.chat(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
 
     assert result.reply == "你好，我是模拟模型。"
 
@@ -81,23 +82,22 @@ async def test_chat_title_uses_first_30_chars(
     fresh_schema,
     test_user_id,
     redis_client,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_call_llm(client, messages):
+    async def fake_complete(messages):
         return "回复"
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
+    llm_provider.complete_handler = fake_complete
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            result = await chat_service.chat(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message=LONG_MESSAGE,
-                user_id=test_user_id,
-                redis=redis_client,
-            )
+    async with AsyncSessionFactory() as session:
+        result = await chat_service.chat(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message=LONG_MESSAGE,
+            user_id=test_user_id,
+            redis=redis_client,
+        )
 
     async with AsyncSessionFactory() as session:
         conversation = await session.get(Conversation, result.conversation_id)
@@ -110,12 +110,12 @@ async def test_chat_uses_existing_conversation(
     fresh_schema,
     test_user_id,
     redis_client,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_call_llm(client, messages):
+    async def fake_complete(messages):
         return "回复"
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
+    llm_provider.complete_handler = fake_complete
 
     async with AsyncSessionFactory() as session:
         conversation = await ConversationRepository(session).create(
@@ -125,16 +125,15 @@ async def test_chat_uses_existing_conversation(
         await session.commit()
         conversation_id = conversation.id
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            result = await chat_service.chat(
-                client=client,
-                session=session,
-                conversation_id=conversation_id,
-                message="继续聊",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
+    async with AsyncSessionFactory() as session:
+        result = await chat_service.chat(
+            provider=llm_provider,
+            session=session,
+            conversation_id=conversation_id,
+            message="继续聊",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
 
     assert result.conversation_id == conversation_id
 
@@ -149,46 +148,41 @@ async def test_chat_uses_existing_conversation(
 
 # 目标：不存在的会话抛 ConversationNotFoundError，且不调用 LLM
 async def test_chat_nonexistent_conversation_raises_not_found(
-    fresh_schema, test_user_id, redis_client, monkeypatch,
+    fresh_schema, test_user_id, redis_client, llm_provider,
 ):
-    async def fake_call_llm(client, messages):
-        raise AssertionError("不存在的会话不应该走到 LLM 调用")
+    async with AsyncSessionFactory() as session:
+        with pytest.raises(ConversationNotFoundError):
+            await chat_service.chat(
+                provider=llm_provider,
+                session=session,
+                conversation_id=999999,
+                message="你好",
+                user_id=test_user_id,
+                redis=redis_client,
+            )
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_call_llm)
-
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            with pytest.raises(ConversationNotFoundError):
-                await chat_service.chat(
-                    client=client,
-                    session=session,
-                    conversation_id=999999,
-                    message="你好",
-                    user_id=test_user_id,
-                    redis=redis_client,
-                )
+    assert llm_provider.complete_calls == []
 
 
 # 目标：LLM 超时抛错，但短事务 1 已提交（会话 + user 消息保留，assistant 不落库）
 async def test_chat_llm_timeout_keeps_user_message_committed(
-    fresh_schema, test_user_id, redis_client, monkeypatch,
+    fresh_schema, test_user_id, redis_client, llm_provider,
 ):
-    async def fake_timeout(client, messages):
+    async def fake_timeout(messages):
         raise LLMTimeoutError("LLM request timeout")
 
-    monkeypatch.setattr(chat_service, "call_llm", fake_timeout)
+    llm_provider.complete_handler = fake_timeout
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            with pytest.raises(LLMTimeoutError):
-                await chat_service.chat(
-                    client=client,
-                    session=session,
-                    conversation_id=None,
-                    message="你好",
-                    user_id=test_user_id,
-                    redis=redis_client,
-                )
+    async with AsyncSessionFactory() as session:
+        with pytest.raises(LLMTimeoutError):
+            await chat_service.chat(
+                provider=llm_provider,
+                session=session,
+                conversation_id=None,
+                message="你好",
+                user_id=test_user_id,
+                redis=redis_client,
+            )
 
     # 短事务 1 必须已提交：会话和 user 消息在，assistant 消息不落库
     async with AsyncSessionFactory() as session:
@@ -203,26 +197,25 @@ async def test_chat_stream_saves_full_reply(
     fresh_schema,
     test_user_id,
     redis_client,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield "你好"
         yield "，世界。"
 
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
 
-            reply_parts = [chunk async for chunk in chunks]
+        reply_parts = [chunk async for chunk in chunks]
 
     assert "".join(reply_parts) == "你好，世界。"
 
@@ -242,9 +235,10 @@ async def test_committed_assistant_save_exception_is_idempotent_under_worker(
     fresh_schema,
     test_user_id,
     redis_test_client,
+    llm_provider,
     monkeypatch,
 ):
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield "数据库已提交但调用结果不确定"
 
     original_save_message = chat_service.save_message
@@ -256,22 +250,21 @@ async def test_committed_assistant_save_exception_is_idempotent_under_worker(
         return result
 
     await retry_queue.ensure_consumer_group(redis_test_client)
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
     monkeypatch.setattr(chat_service, "save_message", commit_then_raise)
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_test_client,
-            )
-            assert "".join([chunk async for chunk in chunks]) == (
-                "数据库已提交但调用结果不确定"
-            )
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_test_client,
+        )
+        assert "".join([chunk async for chunk in chunks]) == (
+            "数据库已提交但调用结果不确定"
+        )
 
     async with AsyncSessionFactory() as session:
         messages = await _messages_of(session, conversation_id)
@@ -307,25 +300,24 @@ async def test_chat_stream_marks_normal_reply_complete(
     fresh_schema,
     test_user_id,
     redis_client,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield "完整"
         yield "回复"
 
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
-            reply = "".join([chunk async for chunk in chunks])
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+        reply = "".join([chunk async for chunk in chunks])
 
     assert reply == "完整回复"
 
@@ -342,25 +334,24 @@ async def test_chat_stream_marks_llm_interruption_incomplete(
     fresh_schema,
     test_user_id,
     redis_client,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield "已经输出的部分"
         raise LLMStreamError("模拟上游中断")
 
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
-            reply = "".join([chunk async for chunk in chunks])
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+        reply = "".join([chunk async for chunk in chunks])
 
     assert reply == "已经输出的部分"
 
@@ -378,26 +369,25 @@ async def test_chat_stream_marks_client_closed_reply_incomplete(
     fresh_schema,
     test_user_id,
     redis_client,
-    monkeypatch,
+    llm_provider,
 ):
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield "第一块"
         yield "不应被消费的第二块"
 
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
-            first_chunk = await anext(chunks)
-            await chunks.aclose()
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+        first_chunk = await anext(chunks)
+        await chunks.aclose()
 
     assert first_chunk == "第一块"
 
@@ -414,12 +404,13 @@ async def test_chat_stream_assistant_save_failure_does_not_break_response(
     fresh_schema,
     test_user_id,
     redis_client,
+    llm_provider,
     monkeypatch,
     caplog,
 ):
     sensitive_reply = "绝不能写入日志的完整回复"
 
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield sensitive_reply
 
     original_save_message = chat_service.save_message
@@ -432,7 +423,7 @@ async def test_chat_stream_assistant_save_failure_does_not_break_response(
             raise SQLAlchemyError("绝不能写入日志的数据库异常详情")
         return await original_save_message(*args, **kwargs)
 
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
     monkeypatch.setattr(chat_service, "save_message", fail_only_assistant_save)
     # Alembic 的 fileConfig 会禁用配置中未声明的既有 logger；测试中显式恢复，
     # 才能用 caplog 验证应用错误日志。
@@ -440,17 +431,16 @@ async def test_chat_stream_assistant_save_failure_does_not_break_response(
     monkeypatch.setattr(chat_service.logger, "propagate", True)
     caplog.set_level(logging.WARNING, logger="app")
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
-            reply = "".join([chunk async for chunk in chunks])
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+        reply = "".join([chunk async for chunk in chunks])
 
     assert reply == sensitive_reply
     assert any(
@@ -490,12 +480,13 @@ async def test_chat_stream_queue_failure_does_not_break_response(
     fresh_schema,
     test_user_id,
     redis_client,
+    llm_provider,
     monkeypatch,
     caplog,
 ):
     sensitive_reply = "队列失败时也不能写入日志的回复"
 
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield sensitive_reply
 
     original_save_message = chat_service.save_message
@@ -508,24 +499,23 @@ async def test_chat_stream_queue_failure_does_not_break_response(
     async def fail_enqueue(redis, job):
         raise RedisError("不应写入日志的 Redis 异常")
 
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
     monkeypatch.setattr(chat_service, "save_message", fail_only_assistant_save)
     monkeypatch.setattr(chat_service, "enqueue_retry_job", fail_enqueue)
     monkeypatch.setattr(chat_service.logger, "disabled", False)
     monkeypatch.setattr(chat_service.logger, "propagate", True)
     caplog.set_level(logging.ERROR, logger="app")
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_client,
-            )
-            reply = "".join([chunk async for chunk in chunks])
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+        reply = "".join([chunk async for chunk in chunks])
 
     assert reply == sensitive_reply
     error_record = next(
@@ -550,11 +540,12 @@ async def test_worker_recovers_assistant_after_initial_save_failure(
     fresh_schema,
     test_user_id,
     redis_test_client,
+    llm_provider,
     monkeypatch,
 ):
     reply = "由 Worker 补偿保存的回复"
 
-    async def fake_stream(client, messages):
+    async def fake_stream(messages):
         yield reply
 
     original_save_message = chat_service.save_message
@@ -565,24 +556,23 @@ async def test_worker_recovers_assistant_after_initial_save_failure(
         return await original_save_message(*args, **kwargs)
 
     await retry_queue.ensure_consumer_group(redis_test_client)
-    monkeypatch.setattr(chat_service, "stream_llm", fake_stream)
+    llm_provider.stream_handler = fake_stream
     monkeypatch.setattr(
         chat_service,
         "save_message",
         fail_initial_assistant_save,
     )
 
-    async with httpx.AsyncClient() as client:
-        async with AsyncSessionFactory() as session:
-            conversation_id, chunks = await chat_service.chat_stream(
-                client=client,
-                session=session,
-                conversation_id=None,
-                message="你好",
-                user_id=test_user_id,
-                redis=redis_test_client,
-            )
-            assert "".join([chunk async for chunk in chunks]) == reply
+    async with AsyncSessionFactory() as session:
+        conversation_id, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            session=session,
+            conversation_id=None,
+            message="你好",
+            user_id=test_user_id,
+            redis=redis_test_client,
+        )
+        assert "".join([chunk async for chunk in chunks]) == reply
 
     async with AsyncSessionFactory() as session:
         messages_before_retry = await _messages_of(session, conversation_id)
