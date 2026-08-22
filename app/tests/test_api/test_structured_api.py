@@ -12,7 +12,7 @@ from app.tests.fakes import ContentLengthTokenCounter
 
 
 class UnsupportedProvider:
-    """A provider that satisfies LLMProvider but not StructuredOutputProvider."""
+    """满足 LLMProvider 但不满足 StructuredOutputProvider 的 provider。"""
 
     async def complete(self, messages) -> str:
         return "text"

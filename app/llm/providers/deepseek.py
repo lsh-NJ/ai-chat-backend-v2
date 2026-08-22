@@ -1,4 +1,4 @@
-"""DeepSeek-compatible HTTP adapter for the application LLM contract."""
+"""面向应用 LLM 契约的 DeepSeek 兼容 HTTP adapter。"""
 
 import json
 import os

@@ -1,4 +1,4 @@
-"""Shared mapping from application LLM errors to HTTP responses."""
+"""应用层 LLM 错误到 HTTP 响应的公共映射。"""
 
 from fastapi import HTTPException
 

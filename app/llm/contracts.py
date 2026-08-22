@@ -1,8 +1,7 @@
-"""Application-facing contracts for LLM capabilities.
+"""面向应用的 LLM 能力契约。
 
-This module deliberately contains no HTTP, environment, or provider-specific
-details. Application services depend on these types; concrete adapters depend
-on this contract and translate it to an upstream protocol.
+本模块刻意不包含 HTTP、环境变量或任何供应商专属细节。
+应用服务依赖这些类型；具体 adapter 依赖并实现本契约，再把契约翻译成上游协议。
 """
 
 from collections.abc import AsyncIterator, Mapping, Sequence
@@ -12,7 +11,7 @@ from typing import Any, Protocol, runtime_checkable
 
 
 class LLMRole(StrEnum):
-    """Conversation roles understood by the application."""
+    """应用层能理解的对话角色。"""
 
     SYSTEM = "system"
     USER = "user"
@@ -21,7 +20,7 @@ class LLMRole(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class LLMMessage:
-    """An immutable, provider-neutral message."""
+    """一条不可变的、与供应商无关的消息。"""
 
     role: LLMRole
     content: str
@@ -35,32 +34,31 @@ class LLMMessage:
 
 @runtime_checkable
 class LLMProvider(Protocol):
-    """The model capabilities required by the Chat application service."""
+    """Chat 应用服务需要的模型能力。"""
 
     async def complete(self, messages: Sequence[LLMMessage]) -> str:
-        """Return one complete assistant response."""
+        """返回一条完整的 assistant 回复。"""
         ...
 
     def stream(
         self,
         messages: Sequence[LLMMessage],
     ) -> AsyncIterator[str]:
-        """Return an iterator of text chunks; iteration raises on failure."""
+        """返回文本块迭代器；迭代过程中失败会抛出异常。"""
         ...
 
 
-# A JSON Schema object is provider-neutral; concrete adapters translate it to
-# their vendor-specific structured-output protocol.
+# JSON Schema 对象本身与供应商无关；具体 adapter 会把它翻译成各自的
+# 供应商结构化输出协议。
 JSONSchema = Mapping[str, Any]
 
 
 @runtime_checkable
 class StructuredOutputProvider(Protocol):
-    """Providers that can return a validated JSON object.
+    """能够返回经过校验的 JSON 对象的 provider。
 
-    The caller is responsible for putting the schema/instruction into the
-    messages when the upstream needs prompt-level guidance; the adapter is
-    responsible for protocol translation, JSON parsing, and schema validation.
+    当上游需要 prompt 层面的引导时，调用方负责把 schema/指令写进 messages；
+    adapter 负责协议翻译、JSON 解析和 schema 校验。
     """
 
     async def complete_structured(
@@ -68,5 +66,5 @@ class StructuredOutputProvider(Protocol):
         messages: Sequence[LLMMessage],
         schema: JSONSchema,
     ) -> dict[str, Any]:
-        """Return a parsed JSON object that validates against ``schema``."""
+        """返回一个通过 ``schema`` 校验的 JSON 对象。"""
         ...

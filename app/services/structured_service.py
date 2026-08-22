@@ -1,4 +1,4 @@
-"""Application service that turns free text into validated structured data."""
+"""把自由文本转换为经过校验的结构化数据的应用服务。"""
 
 import json
 from typing import Any
@@ -52,11 +52,10 @@ async def extract_topic_sentiment(
     text: str,
     retry_policy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ) -> tuple[int, dict[str, Any]]:
-    """Save the user input first, then run validated structured extraction.
+    """先保存用户输入，再执行经过校验的结构化抽取。
 
-    If the structured call fails, the user message remains committed. This
-    mirrors the Chat service's short-transaction semantic: user input is a fact
-    that must not be silently discarded because a downstream LLM call failed.
+    如果结构化调用失败，用户消息仍然保持已提交状态。这与 Chat 服务的
+    短事务语义一致：用户输入已经发生，不能因为下游 LLM 调用失败而被静默丢弃。
     """
     conversation = await create_conversation(
         session=session,

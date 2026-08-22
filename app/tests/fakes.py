@@ -5,7 +5,7 @@ from app.llm.contracts import JSONSchema, LLMMessage
 
 
 class ContentLengthTokenCounter:
-    """Deterministic test counter; never used by the production composition root."""
+    """确定性测试计数器；生产组合根绝不会使用它。"""
 
     def count_messages(self, messages: Sequence[LLMMessage]) -> int:
         return sum(len(message.content) for message in messages)
@@ -18,7 +18,7 @@ StructuredOutputHandler = Callable[
 
 
 class FakeLLMProvider:
-    """Explicit test double implementing the application provider contract."""
+    """显式测试替身，实现应用 provider 契约。"""
 
     def __init__(
         self,

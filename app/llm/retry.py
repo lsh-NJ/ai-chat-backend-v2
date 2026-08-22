@@ -1,8 +1,8 @@
-"""Provider-neutral retry policy for structured LLM output.
+"""与供应商无关的结构化输出重试策略。
 
-Retrying is not free: each attempt adds latency and token cost. The policy
-therefore encodes *which* failures can recover by retrying and how long to
-wait between attempts. It contains no HTTP or provider details.
+重试不是免费的：每次尝试都会增加延迟和 token 成本。
+因此本策略明确“哪些失败可以通过重试恢复”以及“每次重试前等待多久”。
+本模块不包含 HTTP 或供应商细节。
 """
 
 import asyncio
@@ -22,7 +22,7 @@ from app.llm.contracts import JSONSchema, LLMMessage, StructuredOutputProvider
 
 @dataclass(frozen=True, slots=True)
 class RetryPolicy:
-    """How many attempts and how long to wait before retrying."""
+    """最多尝试几次、每次重试前等待多久。"""
 
     max_attempts: int = 3
     base_delay_seconds: float = 0.1
@@ -49,7 +49,7 @@ class RetryPolicy:
             raise ValueError("max_delay_seconds must be >= base_delay_seconds")
 
     def delay_seconds(self, attempt: int) -> float:
-        """Exponential backoff with a cap: base * 2^attempt."""
+        """指数退避并封顶：base * 2^attempt。"""
         return min(
             self.base_delay_seconds * (2**attempt),
             self.max_delay_seconds,
@@ -78,10 +78,9 @@ async def complete_structured_with_retry(
     schema: JSONSchema,
     policy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ) -> dict[str, Any]:
-    """Call ``complete_structured`` and retry only policy-approved failures.
+    """调用 ``complete_structured``，只重试策略允许的失败。
 
-    The last error is re-raised after the final attempt; retries never silently
-    swallow the failure.
+    最后一次尝试后重新抛出最后一个错误；重试永远不会静默吞掉失败。
     """
     last_error: LLMServiceError | None = None
     for attempt in range(policy.max_attempts):
