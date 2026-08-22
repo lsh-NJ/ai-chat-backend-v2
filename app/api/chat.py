@@ -3,14 +3,9 @@ from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.errors import to_http_exception
 from app.core.deps import get_current_user
-from app.core.exceptions import (
-    ConversationNotFoundError,
-    LLMConfigurationError,
-    LLMInputTooLongError,
-    LLMServiceError,
-    LLMTimeoutError,
-)
+from app.core.exceptions import ConversationNotFoundError, LLMServiceError
 from app.db.redis import get_redis
 from app.db.session import get_db
 from app.models.user import User
@@ -21,27 +16,6 @@ from app.schemas.chat import (
 from app.services import chat_service
 
 router = APIRouter(tags=["chat"])
-
-def to_http_exception(e: LLMServiceError) -> HTTPException:
-    if isinstance(e, LLMInputTooLongError):
-        return HTTPException(status_code=422, detail=str(e))
-
-    if isinstance(e, LLMConfigurationError):
-        return HTTPException(
-            status_code=500,
-            detail=str(e),
-        )
-
-    if isinstance(e, LLMTimeoutError):
-        return HTTPException(
-            status_code=504,
-            detail=str(e),
-        )
-
-    return HTTPException(
-        status_code=502,
-        detail=str(e),
-    )
 
 
 @router.post("/chat", response_model=ChatResponse)

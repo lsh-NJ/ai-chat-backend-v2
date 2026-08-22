@@ -21,6 +21,7 @@ async def _create_user_headers(
         ("GET", "/conversations/1/messages", None),
         ("POST", "/chat", {"message": "未认证"}),
         ("POST", "/chat/stream", {"message": "未认证"}),
+        ("POST", "/structured/extract", {"text": "未认证"}),
     ],
 )
 async def test_resource_endpoints_require_token(client, method, path, json_body):

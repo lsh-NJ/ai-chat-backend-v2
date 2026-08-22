@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select
 
-from app.api.chat import to_http_exception
+from app.api.errors import to_http_exception
 from app.core.exceptions import (
     LLMConfigurationError,
     LLMInputTooLongError,

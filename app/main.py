@@ -9,6 +9,7 @@ import app.models.user  # noqa: F401  # 注册模型，避免运行期 Mapper �
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
+from app.api.structured import router as structured_router
 from app.api.user import router as user_router
 from app.core.exceptions import LLMConfigurationError
 from app.db.redis import close_redis, create_redis_client
@@ -113,6 +114,7 @@ def create_app(
     application.include_router(conversations_router)
     application.include_router(auth_router)
     application.include_router(user_router)
+    application.include_router(structured_router)
     return application
 
 

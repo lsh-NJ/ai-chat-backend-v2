@@ -145,6 +145,7 @@ docker compose up -d db redis
 | `GET /conversations/{id}/messages` | 用户 | 当前用户会话历史 |
 | `POST /chat` | 用户 | 普通回复；可自动创建会话 |
 | `POST /chat/stream` | 用户 | 流式回复；会话 ID 位于 `X-Conversation-Id` |
+| `POST /structured/extract` | 用户 | 结构化抽取：返回 `conversation_id`、`topic`、`sentiment` |
 
 ## 事务与失败恢复
 
