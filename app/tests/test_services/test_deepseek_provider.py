@@ -23,6 +23,15 @@ TEST_MESSAGES = [
     LLMMessage(role=LLMRole.SYSTEM, content="system prompt"),
     LLMMessage(role=LLMRole.USER, content="你好"),
 ]
+TEST_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "topic": {"type": "string"},
+        "sentiment": {"type": "string"},
+    },
+    "required": ["topic", "sentiment"],
+    "additionalProperties": False,
+}
 
 
 def _stream_client(body: str, status_code: int = 200) -> httpx.AsyncClient:
@@ -94,6 +103,101 @@ async def test_complete_upstream_error_does_not_expose_response_body() -> None:
         provider = DeepSeekProvider(client, TEST_CONFIG)
         with pytest.raises(LLMUpstreamError) as error:
             await provider.complete(TEST_MESSAGES)
+
+    assert "503" in str(error.value)
+    assert sensitive_body not in str(error.value)
+
+
+async def test_complete_structured_returns_validated_dict() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["response_format"] == {"type": "json_object"}
+        assert payload["max_tokens"] == TEST_CONFIG.max_tokens
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"topic": "AI", "sentiment": "positive"}'
+                        }
+                    }
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        result = await provider.complete_structured(TEST_MESSAGES, TEST_SCHEMA)
+
+    assert result == {"topic": "AI", "sentiment": "positive"}
+
+
+async def test_complete_structured_rejects_invalid_json() -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "not-json"}}]},
+            )
+        )
+    ) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMResponseFormatError, match="valid JSON object"):
+            await provider.complete_structured(TEST_MESSAGES, TEST_SCHEMA)
+
+
+async def test_complete_structured_rejects_schema_mismatch() -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": '{"topic": "AI"}'}}]},
+            )
+        )
+    ) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMResponseFormatError, match="does not match schema"):
+            await provider.complete_structured(TEST_MESSAGES, TEST_SCHEMA)
+
+
+async def test_complete_structured_rejects_empty_content() -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": ""}}]},
+            )
+        )
+    ) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMResponseFormatError, match="valid JSON object"):
+            await provider.complete_structured(TEST_MESSAGES, TEST_SCHEMA)
+
+
+async def test_complete_structured_rejects_invalid_schema_before_request() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("provider must not be called for invalid schema")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMConfigurationError, match="schema is invalid"):
+            await provider.complete_structured(
+                TEST_MESSAGES,
+                {"type": "not-a-valid-type"},
+            )
+
+
+async def test_complete_structured_upstream_error_does_not_expose_body() -> None:
+    sensitive_body = "secret structured upstream body"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text=sensitive_body)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMUpstreamError) as error:
+            await provider.complete_structured(TEST_MESSAGES, TEST_SCHEMA)
 
     assert "503" in str(error.value)
     assert sensitive_body not in str(error.value)

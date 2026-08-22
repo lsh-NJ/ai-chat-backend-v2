@@ -4,6 +4,7 @@ bcrypt
 fastapi
 greenlet>=3.2
 httpx
+jsonschema>=4,<5
 python-dotenv
 pydantic
 pyjwt

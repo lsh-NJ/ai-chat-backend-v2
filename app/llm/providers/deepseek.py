@@ -4,8 +4,11 @@ import json
 import os
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError, ValidationError
 
 from app.core.exceptions import (
     LLMConfigurationError,
@@ -14,7 +17,7 @@ from app.core.exceptions import (
     LLMTimeoutError,
     LLMUpstreamError,
 )
-from app.llm.contracts import LLMMessage
+from app.llm.contracts import JSONSchema, LLMMessage
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,12 +94,21 @@ class DeepSeekProvider:
             "max_tokens": self._config.max_tokens,
         }
 
-    async def complete(self, messages: Sequence[LLMMessage]) -> str:
+    async def _request_content(
+        self,
+        messages: Sequence[LLMMessage],
+        *,
+        response_format: Mapping[str, str] | None = None,
+    ) -> str:
+        payload = self._payload(messages)
+        if response_format is not None:
+            payload = {**payload, "response_format": response_format}
+
         try:
             response = await self._client.post(
                 self._url,
                 headers={**self._headers, "Accept": "application/json"},
-                json=self._payload(messages),
+                json=payload,
             )
             response.raise_for_status()
             data = response.json()
@@ -123,6 +135,40 @@ class DeepSeekProvider:
         ) as exc:
             raise LLMResponseFormatError(
                 "Unexpected LLM API response format"
+            ) from exc
+
+    async def complete(self, messages: Sequence[LLMMessage]) -> str:
+        return await self._request_content(messages)
+
+    async def complete_structured(
+        self,
+        messages: Sequence[LLMMessage],
+        schema: JSONSchema,
+    ) -> dict[str, Any]:
+        try:
+            Draft202012Validator.check_schema(schema)
+        except SchemaError as exc:
+            raise LLMConfigurationError(
+                "LLM structured output schema is invalid"
+            ) from exc
+
+        content = await self._request_content(
+            messages,
+            response_format={"type": "json_object"},
+        )
+        try:
+            parsed = json.loads(content)
+            if not isinstance(parsed, dict):
+                raise TypeError("LLM structured output must be a JSON object")
+            Draft202012Validator(schema).validate(parsed)
+            return parsed
+        except ValidationError as exc:
+            raise LLMResponseFormatError(
+                "LLM structured response does not match schema"
+            ) from exc
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise LLMResponseFormatError(
+                "LLM structured response is not a valid JSON object"
             ) from exc
 
     async def stream(

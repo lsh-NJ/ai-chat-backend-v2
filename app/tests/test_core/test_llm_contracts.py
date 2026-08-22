@@ -2,7 +2,12 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from app.llm.contracts import LLMMessage, LLMProvider, LLMRole
+from app.llm.contracts import (
+    LLMMessage,
+    LLMProvider,
+    LLMRole,
+    StructuredOutputProvider,
+)
 
 
 class FakeProvider:
@@ -12,6 +17,11 @@ class FakeProvider:
     async def stream(self, messages):
         yield "stream:"
         yield messages[-1].content
+
+
+class FakeStructuredProvider:
+    async def complete_structured(self, messages, schema):
+        return {"ok": True}
 
 
 def test_llm_message_is_provider_neutral_and_immutable() -> None:
@@ -38,3 +48,12 @@ async def test_structural_provider_supports_complete_and_stream() -> None:
         "stream:",
         "你好",
     ]
+
+
+async def test_structural_structured_output_provider_contract() -> None:
+    provider: StructuredOutputProvider = FakeStructuredProvider()
+    messages = [LLMMessage(role=LLMRole.USER, content="你好")]
+    schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
+
+    assert isinstance(provider, StructuredOutputProvider)
+    assert await provider.complete_structured(messages, schema) == {"ok": True}

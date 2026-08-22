@@ -5,10 +5,10 @@ details. Application services depend on these types; concrete adapters depend
 on this contract and translate it to an upstream protocol.
 """
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 class LLMRole(StrEnum):
@@ -46,4 +46,27 @@ class LLMProvider(Protocol):
         messages: Sequence[LLMMessage],
     ) -> AsyncIterator[str]:
         """Return an iterator of text chunks; iteration raises on failure."""
+        ...
+
+
+# A JSON Schema object is provider-neutral; concrete adapters translate it to
+# their vendor-specific structured-output protocol.
+JSONSchema = Mapping[str, Any]
+
+
+@runtime_checkable
+class StructuredOutputProvider(Protocol):
+    """Providers that can return a validated JSON object.
+
+    The caller is responsible for putting the schema/instruction into the
+    messages when the upstream needs prompt-level guidance; the adapter is
+    responsible for protocol translation, JSON parsing, and schema validation.
+    """
+
+    async def complete_structured(
+        self,
+        messages: Sequence[LLMMessage],
+        schema: JSONSchema,
+    ) -> dict[str, Any]:
+        """Return a parsed JSON object that validates against ``schema``."""
         ...
