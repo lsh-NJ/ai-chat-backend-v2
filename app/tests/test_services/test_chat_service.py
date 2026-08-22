@@ -48,6 +48,42 @@ async def _messages_of(session, conversation_id: int) -> list[Message]:
     return list(result.scalars().all())
 
 
+async def _seed_message_pairs(
+    session,
+    conversation_id: int,
+    pairs: list[tuple[str, str]],
+) -> None:
+    """写入 user/assistant 成对历史，用于验证 provider 收到的完整上下文。"""
+    for user_content, assistant_content in pairs:
+        await chat_service.save_message(
+            session=session,
+            conversation_id=conversation_id,
+            role="user",
+            content=user_content,
+            is_complete=True,
+        )
+        await chat_service.save_message(
+            session=session,
+            conversation_id=conversation_id,
+            role="assistant",
+            content=assistant_content,
+            is_complete=True,
+        )
+
+
+async def _create_conversation_with_history(
+    user_id: int,
+    title: str,
+    pairs: list[tuple[str, str]],
+) -> int:
+    async with AsyncSessionFactory() as session:
+        conversation = await ConversationRepository(session).create(title, user_id)
+        await session.commit()
+        conversation_id = conversation.id
+        await _seed_message_pairs(session, conversation_id, pairs)
+        return conversation_id
+
+
 # 目标：chat 无会话时自动创建会话，并保存 user + assistant 两条消息
 async def test_chat_creates_conversation_and_saves_messages(
     fresh_schema, test_user_id, redis_client, llm_provider,
@@ -155,6 +191,90 @@ async def test_chat_uses_existing_conversation(
             ("user", "继续聊"),
             ("assistant", "回复"),
         ]
+
+
+# 目标：provider 必须收到 system + 数据库历史（旧到新）+ 当前输入，顺序不能错
+async def test_chat_passes_db_history_and_current_to_provider(
+    fresh_schema,
+    test_user_id,
+    redis_client,
+    llm_provider,
+):
+    conversation_id = await _create_conversation_with_history(
+        test_user_id,
+        "历史会话",
+        [("旧问题1", "旧回答1"), ("旧问题2", "旧回答2")],
+    )
+
+    async with AsyncSessionFactory() as session:
+        await chat_service.chat(
+            provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
+            session=session,
+            conversation_id=conversation_id,
+            message="新问题",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+
+    assert len(llm_provider.complete_calls) == 1
+    messages = llm_provider.complete_calls[0]
+    assert [(m.role, m.content) for m in messages] == [
+        (LLMRole.SYSTEM, chat_service.SYSTEM_MESSAGE.content),
+        (LLMRole.USER, "旧问题1"),
+        (LLMRole.ASSISTANT, "旧回答1"),
+        (LLMRole.USER, "旧问题2"),
+        (LLMRole.ASSISTANT, "旧回答2"),
+        (LLMRole.USER, "新问题"),
+    ]
+
+
+# 目标：普通与流式对相同历史+当前输入必须构造完全相同的上下文
+async def test_complete_and_stream_share_same_context_builder(
+    fresh_schema,
+    test_user_id,
+    redis_client,
+    llm_provider,
+):
+    history = [("旧问题1", "旧回答1"), ("旧问题2", "旧回答2")]
+    complete_conversation_id = await _create_conversation_with_history(
+        test_user_id,
+        "普通会话",
+        history,
+    )
+    stream_conversation_id = await _create_conversation_with_history(
+        test_user_id,
+        "流式会话",
+        history,
+    )
+
+    async with AsyncSessionFactory() as session:
+        await chat_service.chat(
+            provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
+            session=session,
+            conversation_id=complete_conversation_id,
+            message="新问题",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+
+    async with AsyncSessionFactory() as session:
+        _, chunks = await chat_service.chat_stream(
+            provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
+            session=session,
+            conversation_id=stream_conversation_id,
+            message="新问题",
+            user_id=test_user_id,
+            redis=redis_client,
+        )
+        async for _ in chunks:
+            pass
+
+    assert len(llm_provider.complete_calls) == 1
+    assert len(llm_provider.stream_calls) == 1
+    assert llm_provider.complete_calls[0] == llm_provider.stream_calls[0]
 
 
 # 目标：不存在的会话抛 ConversationNotFoundError，且不调用 LLM

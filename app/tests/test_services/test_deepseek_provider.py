@@ -84,6 +84,21 @@ async def test_complete_wraps_malformed_response() -> None:
             await provider.complete(TEST_MESSAGES)
 
 
+async def test_complete_upstream_error_does_not_expose_response_body() -> None:
+    sensitive_body = "secret upstream diagnostic and user content"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, text=sensitive_body)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMUpstreamError) as error:
+            await provider.complete(TEST_MESSAGES)
+
+    assert "503" in str(error.value)
+    assert sensitive_body not in str(error.value)
+
+
 async def test_stream_yields_chunks_when_done_marker_is_received() -> None:
     body = (
         'data: {"choices":[{"delta":{"content":"第一段"}}]}\n\n'

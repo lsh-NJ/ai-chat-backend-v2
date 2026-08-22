@@ -1,9 +1,13 @@
+import pytest
 from sqlalchemy import select
 
 from app.api.chat import to_http_exception
 from app.core.exceptions import (
     LLMConfigurationError,
     LLMInputTooLongError,
+    LLMResponseFormatError,
+    LLMServiceError,
+    LLMStreamError,
     LLMTimeoutError,
     LLMUpstreamError,
 )
@@ -13,11 +17,25 @@ from app.models.conversation import Conversation
 from app.models.message import Message
 
 
-def test_input_too_long_maps_to_request_error() -> None:
-    error = to_http_exception(LLMInputTooLongError("输入过长"))
+@pytest.mark.parametrize(
+    ("exception", "status_code"),
+    [
+        (LLMInputTooLongError("输入过长"), 422),
+        (LLMConfigurationError("配置错误"), 500),
+        (LLMTimeoutError("超时"), 504),
+        (LLMUpstreamError("上游错误"), 502),
+        (LLMResponseFormatError("格式错误"), 502),
+        (LLMStreamError("流未正常完成"), 502),
+    ],
+)
+def test_llm_error_to_http_mapping_is_complete(
+    exception: LLMServiceError,
+    status_code: int,
+) -> None:
+    error = to_http_exception(exception)
 
-    assert error.status_code == 422
-    assert error.detail == "输入过长"
+    assert error.status_code == status_code
+    assert error.detail == str(exception)
 
 
 async def _messages_of(session, conversation_id: int) -> list[Message]:
