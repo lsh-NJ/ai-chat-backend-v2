@@ -1,0 +1,13 @@
+DeepSeek V4 tokenizer resource
+
+Upstream model: deepseek-ai/DeepSeek-V4-Flash
+Upstream revision: a7aaed80dd2df27620eb534454253ea25eb11c7a
+Official source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash
+Download channel used: https://www.modelscope.cn/models/deepseek-ai/DeepSeek-V4-Flash
+File: tokenizer.json
+SHA-256: 8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf
+License: MIT (see the upstream model repository)
+
+The application implements only the system/user/assistant, non-thinking subset
+of the matching official encoding/encoding_dsv4.py contract. Resource mismatch
+must fail application startup; do not replace it with a character-count fallback.

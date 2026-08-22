@@ -42,9 +42,11 @@ import pytest  # noqa: E402
 from app.core.security import create_access_token  # noqa: E402
 from app.db.redis import close_redis, create_redis_client  # noqa: E402
 from app.db.session import AsyncSessionFactory, engine, get_db  # noqa: E402
+from app.llm.context import ContextSelector  # noqa: E402
+from app.llm.tokenization import ContextBudget  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models.user import User  # noqa: E402
-from app.tests.fakes import FakeLLMProvider  # noqa: E402
+from app.tests.fakes import ContentLengthTokenCounter, FakeLLMProvider  # noqa: E402
 
 # 这是一个固定的有效 bcrypt 哈希，只用于构造不关心密码流程的测试用户。
 # 注册/登录测试仍会调用真实的 hash_password / verify_password。
@@ -138,18 +140,30 @@ def llm_provider() -> FakeLLMProvider:
 
 
 @pytest.fixture
+def context_selector() -> ContextSelector:
+    """测试显式注入稳定、宽裕的预算，不加载生产 tokenizer。"""
+    return ContextSelector(
+        ContentLengthTokenCounter(),
+        ContextBudget(context_window=1_000_000, output_reserve=1),
+    )
+
+
+@pytest.fixture
 async def redis_test_client(fresh_schema, real_redis):
     """缓存集成测试使用的真实 Redis；fresh_schema 已完成清理。"""
     return real_redis
 
 
 @pytest.fixture
-async def client(fresh_schema, redis_client, llm_provider):
+async def client(fresh_schema, redis_client, llm_provider, context_selector):
     async def override_get_db():
         async with AsyncSessionFactory() as session:
             yield session
 
-    test_app = create_app(llm_provider=llm_provider)
+    test_app = create_app(
+        llm_provider=llm_provider,
+        context_selector=context_selector,
+    )
     test_app.dependency_overrides[get_db] = override_get_db
     async with test_app.router.lifespan_context(test_app):
         async with httpx.AsyncClient(

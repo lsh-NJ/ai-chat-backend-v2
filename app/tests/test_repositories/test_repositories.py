@@ -127,3 +127,30 @@ async def test_message_list_returns_recent_limit(fresh_schema, test_user_id):
         assert len(recent) == 20
         assert recent[0].content == "消息 5"
         assert recent[-1].content == "消息 24"
+
+
+async def test_message_history_can_use_current_message_id_as_upper_bound(
+    fresh_schema,
+    test_user_id,
+):
+    async with AsyncSessionFactory() as session:
+        conversations = conversation_repository.ConversationRepository(session)
+        conv = await conversations.create(title="并发边界", user_id=test_user_id)
+        messages = message_repository.MessageRepository(session)
+        await messages.add(conv.id, "user", "旧问题", is_complete=True)
+        await messages.add(conv.id, "assistant", "旧回答", is_complete=True)
+        current = await messages.add(conv.id, "user", "当前问题", is_complete=True)
+        await messages.add(conv.id, "user", "并发后来的问题", is_complete=True)
+        await session.commit()
+        conversation_id = conv.id
+        current_id = current.id
+
+    async with AsyncSessionFactory() as session:
+        messages = message_repository.MessageRepository(session)
+        history = await messages.list_by_conversation(
+            conversation_id,
+            limit=None,
+            before_id=current_id,
+        )
+
+    assert [message.content for message in history] == ["旧问题", "旧回答"]

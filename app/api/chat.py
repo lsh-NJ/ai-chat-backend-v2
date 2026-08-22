@@ -7,6 +7,7 @@ from app.core.deps import get_current_user
 from app.core.exceptions import (
     ConversationNotFoundError,
     LLMConfigurationError,
+    LLMInputTooLongError,
     LLMServiceError,
     LLMTimeoutError,
 )
@@ -22,6 +23,9 @@ from app.services import chat_service
 router = APIRouter(tags=["chat"])
 
 def to_http_exception(e: LLMServiceError) -> HTTPException:
+    if isinstance(e, LLMInputTooLongError):
+        return HTTPException(status_code=422, detail=str(e))
+
     if isinstance(e, LLMConfigurationError):
         return HTTPException(
             status_code=500,
@@ -54,6 +58,7 @@ async def chat(
             conversation_id=chat_request.conversation_id,
             message=chat_request.message,
             provider=request.app.state.llm_provider,
+            context_selector=request.app.state.context_selector,
             user_id=current_user.id,
             redis=redis,
         )
@@ -86,6 +91,7 @@ async def chat_stream(
             conversation_id=chat_request.conversation_id,
             message=chat_request.message,
             provider=request.app.state.llm_provider,
+            context_selector=request.app.state.context_selector,
             session=session,
             user_id=current_user.id,
             redis=redis,

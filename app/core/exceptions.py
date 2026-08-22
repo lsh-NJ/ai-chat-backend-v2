@@ -6,6 +6,9 @@ class LLMServiceError(Exception):
 class LLMConfigurationError(LLMServiceError):
     """LLM配置错误"""
 
+class LLMInputTooLongError(LLMServiceError):
+    """必需输入已经超过模型输入预算。"""
+
 class LLMTimeoutError(LLMServiceError):
     """模型请求超时"""
 

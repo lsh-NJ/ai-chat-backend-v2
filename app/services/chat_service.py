@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConversationNotFoundError, LLMServiceError
+from app.llm.context import ContextSelector
 from app.llm.contracts import LLMMessage, LLMProvider, LLMRole
 from app.models.message import Message
 from app.queue.message_retry_queue import enqueue_retry_job
@@ -118,32 +119,32 @@ async def persist_or_enqueue_assistant(
 
 async def get_history_message(
     session: AsyncSession,
-    conversation_id: int, 
-    limit: int = 20,
+    conversation_id: int,
+    before_id: int,
 ) -> list[LLMMessage]:
     message = MessageRepository(session)
-    messages: list[Message] = await message.list_by_conversation(conversation_id, limit)
+    messages: list[Message] = await message.list_by_conversation(
+        conversation_id,
+        limit=None,
+        before_id=before_id,
+    )
     return [
         LLMMessage(role=LLMRole(message.role), content=message.content)
         for message in messages
     ]
 
-async def chat(
-    provider: LLMProvider,
+
+async def build_chat_context(
+    *,
+    selector: ContextSelector,
     session: AsyncSession,
     conversation_id: int | None,
-    message: str,
+    content: str,
     user_id: int,
     redis: Redis,
-) -> ChatResponse:
-    if conversation_id is None:
-        con = await create_conversation(
-            session=session,
-            redis=redis,
-            title=message[:30],
-            user_id=user_id,
-        )
-        conversation_id = con.id
+) -> tuple[int, tuple[LLMMessage, ...]]:
+    """Authorize, persist the current input, then build its bounded context."""
+    current = LLMMessage(role=LLMRole.USER, content=content)
 
     if conversation_id is not None:
         conversation = await ConversationRepository(session).get_by_id_for_user(
@@ -153,21 +154,57 @@ async def chat(
         if conversation is None:
             raise ConversationNotFoundError(conversation_id)
 
-    await save_message(
+    # Validate required input before creating a conversation or writing a message.
+    selector.select(system=SYSTEM_MESSAGE, history=(), current=current)
+
+    if conversation_id is None:
+        conversation = await create_conversation(
+            session=session,
+            redis=redis,
+            title=content[:30],
+            user_id=user_id,
+        )
+        conversation_id = conversation.id
+
+    current_message_id = await save_message(
         session=session,
         conversation_id=conversation_id,
-        role= "user",
-        content=message,
+        role="user",
+        content=content,
         is_complete=True,
     )
-
-    history_messages = await get_history_message(
+    history = await get_history_message(
         session=session,
         conversation_id=conversation_id,
-        limit=20,
+        before_id=current_message_id,
+    )
+    selection = selector.select(
+        system=SYSTEM_MESSAGE,
+        history=history,
+        current=current,
+    )
+    return conversation_id, selection.messages
+
+
+async def chat(
+    provider: LLMProvider,
+    context_selector: ContextSelector,
+    session: AsyncSession,
+    conversation_id: int | None,
+    message: str,
+    user_id: int,
+    redis: Redis,
+) -> ChatResponse:
+    conversation_id, context = await build_chat_context(
+        selector=context_selector,
+        session=session,
+        conversation_id=conversation_id,
+        content=message,
+        user_id=user_id,
+        redis=redis,
     )
 
-    reply = await provider.complete([SYSTEM_MESSAGE, *history_messages])
+    reply = await provider.complete(context)
     await save_message(
         session=session,
         conversation_id=conversation_id,
@@ -184,47 +221,24 @@ async def chat(
 
 async def chat_stream(
     provider: LLMProvider,
+    context_selector: ContextSelector,
     session: AsyncSession,
     conversation_id: int | None,
     message: str,
     user_id: int,
     redis: Redis,
 ):
-    if conversation_id is None:
-        con = await create_conversation(
-            session=session,
-            redis=redis,
-            title=message[:30],
-            user_id=user_id,
-        )
-        conversation_id = con.id
-
-    if conversation_id is not None:
-        conversation = await ConversationRepository(session).get_by_id_for_user(
-            conversation_id,
-            user_id,
-        )
-        if conversation is None:
-            raise ConversationNotFoundError(conversation_id)
-
-    await save_message(
+    conversation_id, context = await build_chat_context(
+        selector=context_selector,
         session=session,
         conversation_id=conversation_id,
-        role= "user",
         content=message,
-        is_complete=True,
-    )
-
-    history_messages = await get_history_message(
-        session=session,
-        conversation_id=conversation_id,
-        limit=20,
+        user_id=user_id,
+        redis=redis,
     )
 
     # async generator 不能 await
-    llm_chunks: AsyncIterator[str] = provider.stream(
-        [SYSTEM_MESSAGE, *history_messages]
-    )
+    llm_chunks: AsyncIterator[str] = provider.stream(context)
 
     fully_parts: list[str] = []
     job_id = uuid4()

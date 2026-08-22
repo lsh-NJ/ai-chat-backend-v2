@@ -17,6 +17,7 @@ TEST_CONFIG = DeepSeekConfig(
     base_url="https://llm.test",
     api_key="test-api-key",
     model="test-model",
+    max_tokens=2048,
 )
 TEST_MESSAGES = [
     LLMMessage(role=LLMRole.SYSTEM, content="system prompt"),
@@ -38,6 +39,7 @@ def test_config_from_env_fails_closed_when_required_value_is_missing() -> None:
             {
                 "DEEPSEEK_BASE_URL": "https://llm.test",
                 "DEEPSEEK_MODEL": "test-model",
+                "LLM_MAX_OUTPUT_TOKENS": "2048",
             }
         )
 
@@ -52,6 +54,7 @@ async def test_complete_translates_contract_to_provider_payload() -> None:
             {"role": "user", "content": "你好"},
         ]
         assert payload["thinking"] == {"type": "disabled"}
+        assert payload["max_tokens"] == 2048
         return httpx.Response(
             200,
             json={"choices": [{"message": {"content": "模型回复"}}]},

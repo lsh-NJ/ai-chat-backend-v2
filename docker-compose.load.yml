@@ -14,7 +14,8 @@ services:
       POSTGRES_DB: chat_v2_load_test
       DEEPSEEK_API_KEY: load-test-only-mock-key
       DEEPSEEK_BASE_URL: http://mock-llm:8081
-      DEEPSEEK_MODEL: mock-chat
+      # Mock endpoint still exercises the production V4 serialization contract.
+      DEEPSEEK_MODEL: deepseek-v4-flash
     depends_on:
       mock-llm:
         condition: service_healthy

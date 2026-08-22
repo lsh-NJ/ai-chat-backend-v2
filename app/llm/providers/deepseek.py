@@ -22,6 +22,7 @@ class DeepSeekConfig:
     base_url: str
     api_key: str
     model: str
+    max_tokens: int
 
     @classmethod
     def from_env(
@@ -29,17 +30,32 @@ class DeepSeekConfig:
         environ: Mapping[str, str] | None = None,
     ) -> "DeepSeekConfig":
         values = os.environ if environ is None else environ
-        required = ("DEEPSEEK_BASE_URL", "DEEPSEEK_API_KEY", "DEEPSEEK_MODEL")
+        required = (
+            "DEEPSEEK_BASE_URL",
+            "DEEPSEEK_API_KEY",
+            "DEEPSEEK_MODEL",
+            "LLM_MAX_OUTPUT_TOKENS",
+        )
         missing = [name for name in required if not values.get(name)]
         if missing:
             raise LLMConfigurationError(
                 "缺少 LLM 配置环境变量: " + ", ".join(missing)
             )
 
+        try:
+            max_tokens = int(values["LLM_MAX_OUTPUT_TOKENS"])
+        except ValueError as exc:
+            raise LLMConfigurationError(
+                "LLM_MAX_OUTPUT_TOKENS 必须是正整数"
+            ) from exc
+        if max_tokens <= 0:
+            raise LLMConfigurationError("LLM_MAX_OUTPUT_TOKENS 必须是正整数")
+
         return cls(
             base_url=values["DEEPSEEK_BASE_URL"].rstrip("/"),
             api_key=values["DEEPSEEK_API_KEY"],
             model=values["DEEPSEEK_MODEL"],
+            max_tokens=max_tokens,
         )
 
 
@@ -72,6 +88,7 @@ class DeepSeekProvider:
             ],
             "temperature": 0.7,
             "thinking": {"type": "disabled"},
+            "max_tokens": self._config.max_tokens,
         }
 
     async def complete(self, messages: Sequence[LLMMessage]) -> str:

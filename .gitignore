@@ -12,7 +12,6 @@ load_tests/results/*
 !load_tests/results/.gitkeep
 .DS_Store
 
-# 学习与设计文档只保留在本地；仓库仅跟踪根目录 README。
 *.md
 *.MD
 !/README.md

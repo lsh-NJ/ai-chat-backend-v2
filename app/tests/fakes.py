@@ -2,6 +2,13 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 from app.llm.contracts import LLMMessage
 
+
+class ContentLengthTokenCounter:
+    """Deterministic test counter; never used by the production composition root."""
+
+    def count_messages(self, messages: Sequence[LLMMessage]) -> int:
+        return sum(len(message.content) for message in messages)
+
 CompleteHandler = Callable[[Sequence[LLMMessage]], Awaitable[str]]
 StreamHandler = Callable[[Sequence[LLMMessage]], AsyncIterator[str]]
 

@@ -79,12 +79,16 @@ class MessageRepository:
         self,
         conversation_id: int,
         limit: int | None = 20,
+        *,
+        before_id: int | None = None,
     ) -> list[Message]:
         query = (
             select(Message)
             .where(Message.conversation_id == conversation_id)
             .order_by(Message.id.desc())
         )
+        if before_id is not None:
+            query = query.where(Message.id < before_id)
         if limit is not None:
             query = query.limit(limit)
 

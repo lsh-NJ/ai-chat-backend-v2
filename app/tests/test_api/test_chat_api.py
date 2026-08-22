@@ -1,7 +1,9 @@
 from sqlalchemy import select
 
+from app.api.chat import to_http_exception
 from app.core.exceptions import (
     LLMConfigurationError,
+    LLMInputTooLongError,
     LLMTimeoutError,
     LLMUpstreamError,
 )
@@ -9,6 +11,13 @@ from app.db.session import AsyncSessionFactory
 from app.llm.contracts import LLMRole
 from app.models.conversation import Conversation
 from app.models.message import Message
+
+
+def test_input_too_long_maps_to_request_error() -> None:
+    error = to_http_exception(LLMInputTooLongError("输入过长"))
+
+    assert error.status_code == 422
+    assert error.detail == "输入过长"
 
 
 async def _messages_of(session, conversation_id: int) -> list[Message]:

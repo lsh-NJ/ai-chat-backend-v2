@@ -8,20 +8,28 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.core.exceptions import (
     ConversationNotFoundError,
+    LLMInputTooLongError,
     LLMStreamError,
     LLMTimeoutError,
 )
 from app.db.session import AsyncSessionFactory
+from app.llm.context import ContextSelector
 from app.llm.contracts import LLMRole
+from app.llm.tokenization import ContextBudget
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.queue import message_retry_queue as retry_queue
 from app.repositories.conversation_repository import ConversationRepository
 from app.services import chat_service
+from app.tests.fakes import ContentLengthTokenCounter
 from app.workers.message_retry_worker import process_retry_entry
 
 # 40 个汉字，用于验证标题只取前 30 字
 LONG_MESSAGE = "一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五"
+TEST_CONTEXT_SELECTOR = ContextSelector(
+    ContentLengthTokenCounter(),
+    ContextBudget(context_window=1_000_000, output_reserve=1),
+)
 
 
 async def _count_rows(session, model: type) -> int:
@@ -55,6 +63,7 @@ async def test_chat_creates_conversation_and_saves_messages(
     async with AsyncSessionFactory() as session:
         result = await chat_service.chat(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -92,6 +101,7 @@ async def test_chat_title_uses_first_30_chars(
     async with AsyncSessionFactory() as session:
         result = await chat_service.chat(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message=LONG_MESSAGE,
@@ -128,6 +138,7 @@ async def test_chat_uses_existing_conversation(
     async with AsyncSessionFactory() as session:
         result = await chat_service.chat(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=conversation_id,
             message="继续聊",
@@ -154,6 +165,7 @@ async def test_chat_nonexistent_conversation_raises_not_found(
         with pytest.raises(ConversationNotFoundError):
             await chat_service.chat(
                 provider=llm_provider,
+                context_selector=TEST_CONTEXT_SELECTOR,
                 session=session,
                 conversation_id=999999,
                 message="你好",
@@ -162,6 +174,35 @@ async def test_chat_nonexistent_conversation_raises_not_found(
             )
 
     assert llm_provider.complete_calls == []
+
+
+async def test_chat_rejects_required_input_before_any_write_or_provider_call(
+    fresh_schema,
+    test_user_id,
+    redis_client,
+    llm_provider,
+):
+    rejecting_selector = ContextSelector(
+        ContentLengthTokenCounter(),
+        ContextBudget(context_window=2, output_reserve=1),
+    )
+
+    async with AsyncSessionFactory() as session:
+        with pytest.raises(LLMInputTooLongError):
+            await chat_service.chat(
+                provider=llm_provider,
+                context_selector=rejecting_selector,
+                session=session,
+                conversation_id=None,
+                message="一定会超长",
+                user_id=test_user_id,
+                redis=redis_client,
+            )
+
+    assert llm_provider.complete_calls == []
+    async with AsyncSessionFactory() as session:
+        assert await _count_rows(session, Conversation) == 0
+        assert await _count_rows(session, Message) == 0
 
 
 # 目标：LLM 超时抛错，但短事务 1 已提交（会话 + user 消息保留，assistant 不落库）
@@ -177,6 +218,7 @@ async def test_chat_llm_timeout_keeps_user_message_committed(
         with pytest.raises(LLMTimeoutError):
             await chat_service.chat(
                 provider=llm_provider,
+                context_selector=TEST_CONTEXT_SELECTOR,
                 session=session,
                 conversation_id=None,
                 message="你好",
@@ -208,6 +250,7 @@ async def test_chat_stream_saves_full_reply(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -256,6 +299,7 @@ async def test_committed_assistant_save_exception_is_idempotent_under_worker(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -311,6 +355,7 @@ async def test_chat_stream_marks_normal_reply_complete(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -345,6 +390,7 @@ async def test_chat_stream_marks_llm_interruption_incomplete(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -380,6 +426,7 @@ async def test_chat_stream_marks_client_closed_reply_incomplete(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -434,6 +481,7 @@ async def test_chat_stream_assistant_save_failure_does_not_break_response(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -509,6 +557,7 @@ async def test_chat_stream_queue_failure_does_not_break_response(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
@@ -566,6 +615,7 @@ async def test_worker_recovers_assistant_after_initial_save_failure(
     async with AsyncSessionFactory() as session:
         conversation_id, chunks = await chat_service.chat_stream(
             provider=llm_provider,
+            context_selector=TEST_CONTEXT_SELECTOR,
             session=session,
             conversation_id=None,
             message="你好",
