@@ -120,7 +120,8 @@ class DeepSeekProvider:
             raise LLMTimeoutError("LLM request timeout") from exc
         except httpx.HTTPStatusError as exc:
             raise LLMUpstreamError(
-                f"LLM API returned status {exc.response.status_code}"
+                f"LLM API returned status {exc.response.status_code}",
+                status_code=exc.response.status_code,
             ) from exc
         except httpx.RequestError as exc:
             raise LLMUpstreamError(
@@ -185,7 +186,8 @@ class DeepSeekProvider:
             ) as response:
                 if response.status_code != 200:
                     raise LLMUpstreamError(
-                        f"LLM API returned status {response.status_code}"
+                        f"LLM API returned status {response.status_code}",
+                        status_code=response.status_code,
                     )
 
                 received_done = False
