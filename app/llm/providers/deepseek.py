@@ -17,7 +17,17 @@ from app.core.exceptions import (
     LLMTimeoutError,
     LLMUpstreamError,
 )
-from app.llm.contracts import JSONSchema, LLMMessage
+from app.llm.contracts import (
+    JSONSchema,
+    LLMMessage,
+    TextCompletion,
+    ToolCall,
+    ToolCallingResult,
+    ToolCallRequest,
+    ToolConversationMessage,
+    ToolDefinition,
+    ToolResultMessage,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,16 +104,10 @@ class DeepSeekProvider:
             "max_tokens": self._config.max_tokens,
         }
 
-    async def _request_content(
+    async def _request(
         self,
-        messages: Sequence[LLMMessage],
-        *,
-        response_format: Mapping[str, str] | None = None,
-    ) -> str:
-        payload = self._payload(messages)
-        if response_format is not None:
-            payload = {**payload, "response_format": response_format}
-
+        payload: Mapping[str, object],
+    ) -> dict[str, Any]:
         try:
             response = await self._client.post(
                 self._url,
@@ -112,10 +116,6 @@ class DeepSeekProvider:
             )
             response.raise_for_status()
             data = response.json()
-            content = data["choices"][0]["message"]["content"]
-            if not isinstance(content, str):
-                raise TypeError("LLM content must be a string")
-            return content
         except httpx.TimeoutException as exc:
             raise LLMTimeoutError("LLM request timeout") from exc
         except httpx.HTTPStatusError as exc:
@@ -127,16 +127,53 @@ class DeepSeekProvider:
             raise LLMUpstreamError(
                 f"LLM API request failed: {type(exc).__name__}"
             ) from exc
-        except (
-            AttributeError,
-            KeyError,
-            IndexError,
-            TypeError,
-            json.JSONDecodeError,
-        ) as exc:
+        except json.JSONDecodeError as exc:
             raise LLMResponseFormatError(
                 "Unexpected LLM API response format"
             ) from exc
+
+        if not isinstance(data, dict):
+            raise LLMResponseFormatError("Unexpected LLM API response format")
+        return data
+
+    @staticmethod
+    def _choice_message(
+        data: Mapping[str, Any],
+    ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+        try:
+            choices = data["choices"]
+            if not isinstance(choices, list) or not choices:
+                raise TypeError("choices must be a non-empty list")
+            choice = choices[0]
+            if not isinstance(choice, Mapping):
+                raise TypeError("choice must be an object")
+            message = choice["message"]
+            if not isinstance(message, Mapping):
+                raise TypeError("message must be an object")
+            return choice, message
+        except (KeyError, TypeError) as exc:
+            raise LLMResponseFormatError(
+                "Unexpected LLM API response format"
+            ) from exc
+
+    async def _request_content(
+        self,
+        messages: Sequence[LLMMessage],
+        *,
+        response_format: Mapping[str, str] | None = None,
+    ) -> str:
+        payload = self._payload(messages)
+        if response_format is not None:
+            payload = {**payload, "response_format": response_format}
+
+        data = await self._request(payload)
+        _, message = self._choice_message(data)
+        content = message.get("content")
+        if not isinstance(content, str):
+            raise LLMResponseFormatError(
+                "Unexpected LLM API response format"
+            )
+        return content
 
     async def complete(self, messages: Sequence[LLMMessage]) -> str:
         return await self._request_content(messages)
@@ -171,6 +208,145 @@ class DeepSeekProvider:
             raise LLMResponseFormatError(
                 "LLM structured response is not a valid JSON object"
             ) from exc
+
+    @staticmethod
+    def _serialize_tool_message(
+        message: ToolConversationMessage,
+    ) -> dict[str, object]:
+        if isinstance(message, LLMMessage):
+            return {"role": message.role.value, "content": message.content}
+        if isinstance(message, ToolCallRequest):
+            return {
+                "role": "assistant",
+                "content": message.content or None,
+                "tool_calls": [
+                    {
+                        "id": call.call_id,
+                        "type": "function",
+                        "function": {
+                            "name": call.name,
+                            "arguments": json.dumps(
+                                dict(call.arguments),
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                separators=(",", ":"),
+                            ),
+                        },
+                    }
+                    for call in message.tool_calls
+                ],
+            }
+        if isinstance(message, ToolResultMessage):
+            return {
+                "role": "tool",
+                "tool_call_id": message.call_id,
+                "content": message.content,
+            }
+        raise TypeError("unsupported tool conversation message")
+
+    @staticmethod
+    def _serialize_tool(tool: ToolDefinition) -> dict[str, object]:
+        return {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": dict(tool.parameters),
+            },
+        }
+
+    @staticmethod
+    def _parse_tool_call(raw_call: object) -> ToolCall:
+        try:
+            if not isinstance(raw_call, Mapping):
+                raise TypeError("tool call must be an object")
+            call_id = raw_call["id"]
+            if raw_call.get("type") != "function":
+                raise TypeError("tool call type must be function")
+            function = raw_call["function"]
+            if not isinstance(function, Mapping):
+                raise TypeError("tool call function must be an object")
+            name = function["name"]
+            raw_arguments = function["arguments"]
+            if not isinstance(raw_arguments, str):
+                raise TypeError("tool arguments must be a string")
+            arguments = json.loads(raw_arguments)
+            if not isinstance(arguments, dict):
+                raise TypeError("tool arguments must be an object")
+            return ToolCall(
+                call_id=call_id,
+                name=name,
+                arguments=arguments,
+            )
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            raise LLMResponseFormatError(
+                "Unexpected LLM tool call response format"
+            ) from exc
+
+    async def complete_with_tools(
+        self,
+        messages: Sequence[ToolConversationMessage],
+        tools: Sequence[ToolDefinition],
+    ) -> ToolCallingResult:
+        payload = {
+            "model": self._config.model,
+            "messages": [
+                self._serialize_tool_message(message) for message in messages
+            ],
+            "tools": [self._serialize_tool(tool) for tool in tools],
+            "tool_choice": "auto",
+            "temperature": 0.7,
+            "thinking": {"type": "disabled"},
+            "max_tokens": self._config.max_tokens,
+        }
+        data = await self._request(payload)
+        choice, message = self._choice_message(data)
+        finish_reason = choice.get("finish_reason")
+        raw_tool_calls = message.get("tool_calls")
+
+        if finish_reason == "stop":
+            if raw_tool_calls not in (None, []):
+                raise LLMResponseFormatError(
+                    "LLM tool response reason contradicts message"
+                )
+            content = message.get("content")
+            if not isinstance(content, str) or not content.strip():
+                raise LLMResponseFormatError(
+                    "LLM tool response did not contain complete text"
+                )
+            return TextCompletion(content=content)
+
+        if finish_reason == "tool_calls":
+            if not isinstance(raw_tool_calls, list) or not raw_tool_calls:
+                raise LLMResponseFormatError(
+                    "LLM tool response did not contain tool calls"
+                )
+            raw_content = message.get("content")
+            if raw_content is not None and not isinstance(raw_content, str):
+                raise LLMResponseFormatError(
+                    "Unexpected LLM tool call response format"
+                )
+            try:
+                return ToolCallRequest(
+                    tool_calls=tuple(
+                        self._parse_tool_call(raw_call)
+                        for raw_call in raw_tool_calls
+                    ),
+                    content=raw_content or "",
+                )
+            except (TypeError, ValueError) as exc:
+                raise LLMResponseFormatError(
+                    "Unexpected LLM tool call response format"
+                ) from exc
+
+        raise LLMResponseFormatError(
+            "LLM tool response did not contain a complete result"
+        )
 
     async def stream(
         self,

@@ -10,7 +10,16 @@ from app.core.exceptions import (
     LLMTimeoutError,
     LLMUpstreamError,
 )
-from app.llm.contracts import LLMMessage, LLMRole
+from app.llm.contracts import (
+    LLMMessage,
+    LLMRole,
+    TextCompletion,
+    ToolCall,
+    ToolCallingProvider,
+    ToolCallRequest,
+    ToolDefinition,
+    ToolResultMessage,
+)
 from app.llm.providers.deepseek import DeepSeekConfig, DeepSeekProvider
 
 TEST_CONFIG = DeepSeekConfig(
@@ -32,6 +41,15 @@ TEST_SCHEMA = {
     "required": ["topic", "sentiment"],
     "additionalProperties": False,
 }
+TEST_TOOL = ToolDefinition(
+    name="get_conversation",
+    description="读取会话",
+    parameters={
+        "type": "object",
+        "properties": {"conversation_id": {"type": "integer"}},
+        "required": ["conversation_id"],
+    },
+)
 
 
 def _stream_client(body: str, status_code: int = 200) -> httpx.AsyncClient:
@@ -106,6 +124,238 @@ async def test_complete_upstream_error_does_not_expose_response_body() -> None:
 
     assert "503" in str(error.value)
     assert sensitive_body not in str(error.value)
+
+
+async def test_deepseek_provider_satisfies_tool_calling_protocol() -> None:
+    async with httpx.AsyncClient() as client:
+        assert isinstance(
+            DeepSeekProvider(client, TEST_CONFIG),
+            ToolCallingProvider,
+        )
+
+
+async def test_complete_with_tools_returns_text_completion() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["tools"] == [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_conversation",
+                    "description": "读取会话",
+                    "parameters": TEST_TOOL.parameters,
+                },
+            }
+        ]
+        assert payload["tool_choice"] == "auto"
+        assert payload["thinking"] == {"type": "disabled"}
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "最终回答"},
+                    }
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        result = await provider.complete_with_tools(TEST_MESSAGES, [TEST_TOOL])
+
+    assert result == TextCompletion(content="最终回答")
+
+
+async def test_complete_with_tools_parses_multiple_calls() -> None:
+    response_calls = [
+        {
+            "id": "call-1",
+            "type": "function",
+            "function": {
+                "name": "get_conversation",
+                "arguments": '{"conversation_id": 7}',
+            },
+        },
+        {
+            "id": "call-2",
+            "type": "function",
+            "function": {
+                "name": "get_conversation",
+                "arguments": '{"conversation_id": 8}',
+            },
+        },
+    ]
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "finish_reason": "tool_calls",
+                            "message": {
+                                "content": None,
+                                "tool_calls": response_calls,
+                            },
+                        }
+                    ]
+                },
+            )
+        )
+    ) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        result = await provider.complete_with_tools(TEST_MESSAGES, [TEST_TOOL])
+
+    assert result == ToolCallRequest(
+        tool_calls=(
+            ToolCall(
+                call_id="call-1",
+                name="get_conversation",
+                arguments={"conversation_id": 7},
+            ),
+            ToolCall(
+                call_id="call-2",
+                name="get_conversation",
+                arguments={"conversation_id": 8},
+            ),
+        )
+    )
+
+
+async def test_complete_with_tools_replays_tool_round_trip() -> None:
+    request_message = ToolCallRequest(
+        tool_calls=(
+            ToolCall(
+                call_id="call-1",
+                name="get_conversation",
+                arguments={"z": "中文", "a": 1},
+            ),
+        )
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["messages"] == [
+            {"role": "user", "content": "读取会话"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "get_conversation",
+                            "arguments": '{"a":1,"z":"中文"}',
+                        },
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "tool_call_id": "call-1",
+                "content": '{"title":"测试"}',
+            },
+        ]
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "读取完成"},
+                    }
+                ]
+            },
+        )
+
+    messages = [
+        LLMMessage(role=LLMRole.USER, content="读取会话"),
+        request_message,
+        ToolResultMessage(
+            call_id="call-1",
+            content='{"title":"测试"}',
+        ),
+    ]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        result = await provider.complete_with_tools(messages, [TEST_TOOL])
+
+    assert result == TextCompletion(content="读取完成")
+
+
+@pytest.mark.parametrize(
+    ("finish_reason", "message"),
+    [
+        ("tool_calls", {"content": None, "tool_calls": []}),
+        ("stop", {"content": "回答", "tool_calls": [{"id": "call-1"}]}),
+        ("length", {"content": "被截断"}),
+        ("content_filter", {"content": None}),
+        ("insufficient_system_resource", {"content": None}),
+    ],
+)
+async def test_complete_with_tools_rejects_incomplete_or_contradictory_response(
+    finish_reason: str,
+    message: dict[str, object],
+) -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"finish_reason": finish_reason, "message": message}
+                    ]
+                },
+            )
+        )
+    ) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMResponseFormatError):
+            await provider.complete_with_tools(TEST_MESSAGES, [TEST_TOOL])
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    ["not-json", "[]", '"text"', "null"],
+)
+async def test_complete_with_tools_rejects_invalid_arguments_without_exposure(
+    arguments: str,
+) -> None:
+    sensitive_arguments = arguments
+    response = {
+        "choices": [
+            {
+                "finish_reason": "tool_calls",
+                "message": {
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": "call-1",
+                            "type": "function",
+                            "function": {
+                                "name": "get_conversation",
+                                "arguments": sensitive_arguments,
+                            },
+                        }
+                    ],
+                },
+            }
+        ]
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json=response)
+        )
+    ) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        with pytest.raises(LLMResponseFormatError) as error:
+            await provider.complete_with_tools(TEST_MESSAGES, [TEST_TOOL])
+
+    assert sensitive_arguments not in str(error.value)
 
 
 async def test_complete_structured_returns_validated_dict() -> None:
