@@ -6,7 +6,10 @@ from app.db.session import AsyncSessionFactory
 from app.llm.contracts import ToolCall
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.tools.conversation import create_conversation_messages_tool
+from app.tools.conversation import (
+    GET_CONVERSATION_MESSAGES_DEFINITION,
+    create_conversation_messages_tool,
+)
 from app.tools.exceptions import ToolResourceUnavailableError
 from app.tools.execution import ToolExecutionContext, ToolExecutor, ToolRegistry
 
@@ -90,3 +93,17 @@ async def test_conversation_tool_does_not_distinguish_missing_from_unauthorized(
                 ),
                 ToolExecutionContext(user_id=user.id),
             )
+
+
+def test_conversation_tool_schema_does_not_accept_user_id() -> None:
+    """模型可见的 schema 不包含 user_id，可信身份只能由应用注入。"""
+
+    properties = GET_CONVERSATION_MESSAGES_DEFINITION.parameters["properties"]
+    required = GET_CONVERSATION_MESSAGES_DEFINITION.parameters["required"]
+    additional_properties = GET_CONVERSATION_MESSAGES_DEFINITION.parameters[
+        "additionalProperties"
+    ]
+
+    assert "user_id" not in properties
+    assert "user_id" not in required
+    assert additional_properties is False
