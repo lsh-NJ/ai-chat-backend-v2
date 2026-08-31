@@ -61,7 +61,7 @@ class RegisteredTool:
 
 
 class ToolRegistry:
-    """应用启动时构造、之后不可动态增加能力的工具白名单。"""
+    """由应用显式构造、之后不可动态增加能力的工具白名单。"""
 
     def __init__(self, tools: Sequence[RegisteredTool]) -> None:
         registered: dict[str, RegisteredTool] = {}
@@ -115,6 +115,12 @@ class ToolExecutor:
             raise ToolConfigurationError("tool timeout must be finite and positive")
         self._registry = registry
         self._timeout_seconds = float(timeout_seconds)
+
+    @property
+    def definitions(self) -> tuple[ToolDefinition, ...]:
+        """返回与执行白名单来自同一 Registry 的公开工具定义。"""
+
+        return self._registry.definitions
 
     async def execute(
         self,

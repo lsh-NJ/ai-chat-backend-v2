@@ -293,17 +293,18 @@ class DeepSeekProvider:
         messages: Sequence[ToolConversationMessage],
         tools: Sequence[ToolDefinition],
     ) -> ToolCallingResult:
-        payload = {
+        payload: dict[str, object] = {
             "model": self._config.model,
             "messages": [
                 self._serialize_tool_message(message) for message in messages
             ],
-            "tools": [self._serialize_tool(tool) for tool in tools],
-            "tool_choice": "auto",
             "temperature": 0.7,
             "thinking": {"type": "disabled"},
             "max_tokens": self._config.max_tokens,
         }
+        if tools:
+            payload["tools"] = [self._serialize_tool(tool) for tool in tools]
+            payload["tool_choice"] = "auto"
         data = await self._request(payload)
         choice, message = self._choice_message(data)
         finish_reason = choice.get("finish_reason")

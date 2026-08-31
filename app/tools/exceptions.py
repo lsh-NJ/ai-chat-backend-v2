@@ -27,3 +27,11 @@ class ToolTimeoutError(ToolError):
 
 class ToolExecutionError(ToolError):
     """工具执行或结果序列化失败。"""
+
+
+class ToolProtocolError(ToolError):
+    """工具消息历史或 call ID 关联不满足应用协议。"""
+
+
+class ToolLoopLimitError(ToolError):
+    """工具预算耗尽后的强制收尾没有返回最终文本。"""

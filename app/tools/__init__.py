@@ -9,7 +9,9 @@ from app.tools.exceptions import (
     ToolConfigurationError,
     ToolError,
     ToolExecutionError,
+    ToolLoopLimitError,
     ToolNotFoundError,
+    ToolProtocolError,
     ToolResourceUnavailableError,
     ToolTimeoutError,
 )
@@ -21,9 +23,15 @@ from app.tools.execution import (
     ToolRegistry,
     ToolResult,
 )
+from app.tools.orchestrator import (
+    FINALIZATION_INSTRUCTION,
+    ToolLoopPolicy,
+    ToolOrchestrator,
+)
 
 __all__ = [
     "GET_CONVERSATION_MESSAGES_DEFINITION",
+    "FINALIZATION_INSTRUCTION",
     "RegisteredTool",
     "ToolArgumentsValidationError",
     "ToolConfigurationError",
@@ -32,7 +40,11 @@ __all__ = [
     "ToolExecutionError",
     "ToolExecutor",
     "ToolHandler",
+    "ToolLoopLimitError",
+    "ToolLoopPolicy",
     "ToolNotFoundError",
+    "ToolOrchestrator",
+    "ToolProtocolError",
     "ToolRegistry",
     "ToolResourceUnavailableError",
     "ToolResult",

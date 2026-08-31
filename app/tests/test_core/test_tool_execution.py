@@ -66,6 +66,15 @@ def test_registry_exposes_definitions_in_registration_order() -> None:
     assert registry.definitions == (TEST_DEFINITION, second)
 
 
+def test_executor_exposes_definitions_from_its_execution_registry() -> None:
+    registry = ToolRegistry(
+        [RegisteredTool(TEST_DEFINITION, RecordingHandler())]
+    )
+    executor = ToolExecutor(registry, timeout_seconds=1)
+
+    assert executor.definitions == registry.definitions
+
+
 def test_registry_rejects_duplicate_names() -> None:
     handler = RecordingHandler()
     with pytest.raises(ToolConfigurationError, match="duplicate"):

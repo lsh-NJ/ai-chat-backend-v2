@@ -168,6 +168,30 @@ async def test_complete_with_tools_returns_text_completion() -> None:
     assert result == TextCompletion(content="最终回答")
 
 
+async def test_complete_with_no_tools_omits_tool_fields() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert "tools" not in payload
+        assert "tool_choice" not in payload
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "根据现有资料回答"},
+                    }
+                ]
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = DeepSeekProvider(client, TEST_CONFIG)
+        result = await provider.complete_with_tools(TEST_MESSAGES, ())
+
+    assert result == TextCompletion(content="根据现有资料回答")
+
+
 async def test_complete_with_tools_parses_multiple_calls() -> None:
     response_calls = [
         {
