@@ -48,7 +48,7 @@ def main() -> None:
     print("=== temperature 的影响 ===")
     for temp in (0.2, 1.0, 2.0):
         probs = softmax(LOGITS, temperature=temp)
-        row = "  ".join(f"{t}={p:.3f}" for t, p in zip(TOKENS, probs))
+        row = "  ".join(f"{t}={p:.3f}" for t, p in zip(TOKENS, probs, strict=True))
         print(f"temp={temp:<4} -> {row}")
 
     print()
