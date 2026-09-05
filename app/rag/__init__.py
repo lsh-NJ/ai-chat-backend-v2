@@ -1,5 +1,6 @@
 """RAG 数据管线：文档模型、解析、切分与入库。"""
 
+from app.rag.chunking import Chunk, chunk_document
 from app.rag.documents import Document, compute_content_hash
 from app.rag.parsers import (
     DocumentParseError,
@@ -9,8 +10,10 @@ from app.rag.parsers import (
 )
 
 __all__ = [
+    "Chunk",
     "Document",
     "DocumentParseError",
+    "chunk_document",
     "compute_content_hash",
     "parse_document",
     "parse_html",
