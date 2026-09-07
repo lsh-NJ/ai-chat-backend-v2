@@ -1,5 +1,6 @@
 """RAG 数据管线：文档模型、解析、切分与入库。"""
 
+from app.rag.bm25 import InMemoryBM25Retriever, tokenize
 from app.rag.chunking import Chunk, chunk_document
 from app.rag.documents import Document, compute_content_hash
 from app.rag.ingestion import (
@@ -15,6 +16,7 @@ from app.rag.parsers import (
     parse_html,
     parse_markdown,
 )
+from app.rag.retrieval import ChunkHit, Retriever
 from app.rag.store import (
     DocumentStore,
     DuplicateContentError,
@@ -24,15 +26,19 @@ from app.rag.store import (
 
 __all__ = [
     "Chunk",
+    "ChunkHit",
     "Document",
     "DocumentParseError",
     "DocumentStore",
+    "Retriever",
+    "tokenize",
     "DuplicateContentError",
     "DuplicateIdError",
     "InMemoryDocumentStore",
     "IngestionBatchResult",
     "IngestionResult",
     "IngestionStatus",
+    "InMemoryBM25Retriever",
     "chunk_document",
     "compute_content_hash",
     "ingest_document",
