@@ -64,6 +64,15 @@ def validate_top_k(top_k: object) -> None:
         raise ValueError("top_k must be positive")
 
 
+def matches_metadata(chunk: Chunk, metadata_filter: Mapping[str, Any] | None) -> bool:
+    """metadata_filter 为 None 时全部通过；否则所有键值必须精确相等。"""
+    if metadata_filter is None:
+        return True
+    return all(
+        chunk.metadata.get(key) == value for key, value in metadata_filter.items()
+    )
+
+
 @runtime_checkable
 class Retriever(Protocol):
     """RAG 检索器契约。

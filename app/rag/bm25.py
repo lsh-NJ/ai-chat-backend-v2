@@ -13,7 +13,12 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.rag.chunking import Chunk
-from app.rag.retrieval import ChunkHit, validate_query, validate_top_k
+from app.rag.retrieval import (
+    ChunkHit,
+    matches_metadata,
+    validate_query,
+    validate_top_k,
+)
 
 _LATIN_TOKEN_RE = re.compile(r"[a-z0-9]+")
 _CJK_START = 0x4E00
@@ -45,14 +50,6 @@ def _validate_float_param(value: object, name: str, *, minimum: float) -> float:
     if result < minimum:
         raise ValueError(f"{name} must be >= {minimum}")
     return result
-
-
-def _matches(chunk: Chunk, metadata_filter: Mapping[str, Any] | None) -> bool:
-    if metadata_filter is None:
-        return True
-    return all(
-        chunk.metadata.get(key) == value for key, value in metadata_filter.items()
-    )
 
 
 class InMemoryBM25Retriever:
@@ -133,7 +130,7 @@ class InMemoryBM25Retriever:
             )
 
             for index in posting:
-                if not _matches(self._chunks[index], metadata_filter):
+                if not matches_metadata(self._chunks[index], metadata_filter):
                     continue
 
                 term_frequency = self._term_frequencies[index].get(term, 0)

@@ -2,6 +2,11 @@
 
 from app.rag.bm25 import InMemoryBM25Retriever, tokenize
 from app.rag.chunking import Chunk, chunk_document
+from app.rag.dense import (
+    InMemoryDenseRetriever,
+    cosine_similarity,
+    hash_embed,
+)
 from app.rag.documents import Document, compute_content_hash
 from app.rag.ingestion import (
     IngestionBatchResult,
@@ -28,6 +33,9 @@ __all__ = [
     "Chunk",
     "ChunkHit",
     "Document",
+    "InMemoryDenseRetriever",
+    "cosine_similarity",
+    "hash_embed",
     "DocumentParseError",
     "DocumentStore",
     "Retriever",
