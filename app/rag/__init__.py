@@ -8,6 +8,14 @@ from app.rag.dense import (
     hash_embed,
 )
 from app.rag.documents import Document, compute_content_hash
+from app.rag.evaluation import (
+    EvalQuery,
+    RetrievalReport,
+    evaluate_retriever,
+    ndcg_at_k,
+    recall_at_k,
+    reciprocal_rank_at_k,
+)
 from app.rag.ingestion import (
     IngestionBatchResult,
     IngestionResult,
@@ -33,9 +41,15 @@ __all__ = [
     "Chunk",
     "ChunkHit",
     "Document",
+    "EvalQuery",
     "InMemoryDenseRetriever",
+    "RetrievalReport",
     "cosine_similarity",
+    "evaluate_retriever",
     "hash_embed",
+    "ndcg_at_k",
+    "recall_at_k",
+    "reciprocal_rank_at_k",
     "DocumentParseError",
     "DocumentStore",
     "Retriever",
