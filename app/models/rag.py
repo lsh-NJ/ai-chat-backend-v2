@@ -124,6 +124,11 @@ class RagChunk(Base):
             "tenant_id",
             "document_id",
         ),
+        Index(
+            "ix_rag_chunks_content_fts",
+            text("to_tsvector('simple', content)"),
+            postgresql_using="gin",
+        ),
         CheckConstraint(
             "length(tenant_id) > 0 AND length(chunk_id) > 0",
             name="ck_rag_chunks_tenant_chunk_nonempty",

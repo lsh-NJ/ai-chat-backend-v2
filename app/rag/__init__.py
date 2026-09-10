@@ -17,6 +17,8 @@ from app.rag.evaluation import (
     recall_at_k,
     reciprocal_rank_at_k,
 )
+from app.rag.fusion import rrf_fuse
+from app.rag.hybrid import AsyncHybridRetriever
 from app.rag.ingestion import (
     IngestionBatchResult,
     IngestionResult,
@@ -33,6 +35,7 @@ from app.rag.parsers import (
     parse_markdown,
 )
 from app.rag.postgres_dense import PostgresDenseRetriever
+from app.rag.postgres_fts import PostgresFullTextRetriever
 from app.rag.postgres_store import PostgresChunkStore, PostgresDocumentStore
 from app.rag.retrieval import AsyncRetriever, ChunkHit, Retriever
 from app.rag.store import (
@@ -63,12 +66,15 @@ __all__ = [
     "DocumentStore",
     "AsyncChunkStore",
     "AsyncDocumentStore",
+    "AsyncHybridRetriever",
     "AsyncRetriever",
     "DocumentNotFoundError",
     "PostgresChunkStore",
     "PostgresDenseRetriever",
     "PostgresDocumentStore",
+    "PostgresFullTextRetriever",
     "Retriever",
+    "rrf_fuse",
     "tokenize",
     "DuplicateContentError",
     "DuplicateIdError",
