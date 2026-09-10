@@ -48,8 +48,21 @@ def row_to_chunk(row: RagChunk) -> Chunk:
 
 
 def _constraint_name(exc: IntegrityError) -> str:
-    """从 asyncpg 的异常里提取约束名，用于精确翻译领域错误。"""
-    return getattr(exc.orig, "constraint_name", "") or ""
+    """从 asyncpg 的异常链里提取约束名，用于精确翻译领域错误。
+
+    SQLAlchemy 的 asyncpg 方言会把底层 asyncpg 异常包在
+    ``AsyncAdapt_asyncpg_dbapi.*`` 里，``constraint_name`` 往往在更内层的
+    ``__cause__`` / ``__context__``，所以必须沿异常链查找，不能只看 ``exc.orig``。
+    """
+    error: BaseException | None = exc.orig
+    seen: set[int] = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        name = getattr(error, "constraint_name", None)
+        if isinstance(name, str) and name:
+            return name
+        error = error.__cause__ or error.__context__
+    return ""
 
 
 def _document_version(document: Document) -> int:

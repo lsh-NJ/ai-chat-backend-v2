@@ -129,7 +129,9 @@ class RagChunk(Base):
             name="ck_rag_chunks_tenant_chunk_nonempty",
         ),
         CheckConstraint(
-            "start >= 0 AND end > start",
+            # end 是 SQL 保留字，裸写在 CHECK 表达式里会导致 DDL 语法错误；
+            # ORM 生成的普通 SQL 会自动加引号，这里必须显式写成 "end"。
+            'start >= 0 AND "end" > start',
             name="ck_rag_chunks_start_end",
         ),
     )

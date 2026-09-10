@@ -96,7 +96,8 @@ def upgrade() -> None:
             name="ck_rag_chunks_tenant_chunk_nonempty",
         ),
         sa.CheckConstraint(
-            "start >= 0 AND end > start",
+            # end 是 SQL 保留字，CHECK 表达式不会自动引用标识符，必须手写双引号。
+            'start >= 0 AND "end" > start',
             name="ck_rag_chunks_start_end",
         ),
         sa.ForeignKeyConstraint(
