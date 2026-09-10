@@ -22,6 +22,24 @@ async def test_pgvector_extension_is_enabled(fresh_schema) -> None:
     assert extension == "vector"
 
 
+async def test_rag_chunks_full_text_gin_index_exists(fresh_schema) -> None:
+    async with engine.connect() as conn:
+        indexdef = (
+            await conn.execute(
+                text(
+                    "SELECT indexdef FROM pg_indexes "
+                    "WHERE schemaname = 'public' "
+                    "AND indexname = 'ix_rag_chunks_content_fts'"
+                )
+            )
+        ).scalar_one()
+
+    normalized = indexdef.lower()
+    assert "using gin" in normalized
+    assert "to_tsvector" in normalized
+    assert "content" in normalized
+
+
 async def test_rag_tables_exist_with_expected_columns(fresh_schema) -> None:
     async with engine.connect() as conn:
         tables = {

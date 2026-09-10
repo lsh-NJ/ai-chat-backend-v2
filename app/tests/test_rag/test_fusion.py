@@ -56,6 +56,16 @@ def test_rrf_fuse_breaks_score_ties_by_chunk_id() -> None:
     assert fused[0].score == pytest.approx(fused[1].score)
 
 
+def test_rrf_fuse_does_not_depend_on_result_list_order() -> None:
+    sparse = [make_hit("a"), make_hit("b")]
+    dense = [make_hit("b"), make_hit("c")]
+
+    sparse_first = rrf_fuse([sparse, dense], k=60, top_k=3)
+    dense_first = rrf_fuse([dense, sparse], k=60, top_k=3)
+
+    assert sparse_first == dense_first
+
+
 def test_rrf_fuse_returns_empty_for_no_result_lists() -> None:
     assert rrf_fuse([], top_k=10) == ()
 
