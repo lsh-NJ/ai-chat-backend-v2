@@ -6,6 +6,7 @@ from app.rag.dense import (
     InMemoryDenseRetriever,
     cosine_similarity,
     hash_embed,
+    validate_embedding,
 )
 from app.rag.documents import Document, compute_content_hash
 from app.rag.evaluation import (
@@ -21,7 +22,9 @@ from app.rag.ingestion import (
     IngestionResult,
     IngestionStatus,
     ingest_document,
+    ingest_document_async,
     ingest_documents,
+    ingest_documents_async,
 )
 from app.rag.parsers import (
     DocumentParseError,
@@ -29,12 +32,18 @@ from app.rag.parsers import (
     parse_html,
     parse_markdown,
 )
-from app.rag.retrieval import ChunkHit, Retriever
+from app.rag.postgres_dense import PostgresDenseRetriever
+from app.rag.postgres_store import PostgresChunkStore, PostgresDocumentStore
+from app.rag.retrieval import AsyncRetriever, ChunkHit, Retriever
 from app.rag.store import (
+    AsyncChunkStore,
+    AsyncDocumentStore,
+    DocumentNotFoundError,
     DocumentStore,
     DuplicateContentError,
     DuplicateIdError,
     InMemoryDocumentStore,
+    VersionConflictError,
 )
 
 __all__ = [
@@ -52,6 +61,13 @@ __all__ = [
     "reciprocal_rank_at_k",
     "DocumentParseError",
     "DocumentStore",
+    "AsyncChunkStore",
+    "AsyncDocumentStore",
+    "AsyncRetriever",
+    "DocumentNotFoundError",
+    "PostgresChunkStore",
+    "PostgresDenseRetriever",
+    "PostgresDocumentStore",
     "Retriever",
     "tokenize",
     "DuplicateContentError",
@@ -61,10 +77,14 @@ __all__ = [
     "IngestionResult",
     "IngestionStatus",
     "InMemoryBM25Retriever",
+    "VersionConflictError",
     "chunk_document",
     "compute_content_hash",
+    "validate_embedding",
     "ingest_document",
+    "ingest_document_async",
     "ingest_documents",
+    "ingest_documents_async",
     "parse_document",
     "parse_html",
     "parse_markdown",

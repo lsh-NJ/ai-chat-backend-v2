@@ -95,7 +95,10 @@ async def fresh_schema(migrated_schema, real_redis):
     await real_redis.flushdb()
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE TABLE messages, conversations, users RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE TABLE messages, conversations, users, "
+                "rag_chunks, rag_documents RESTART IDENTITY CASCADE"
+            )
         )
     yield
     await real_redis.flushdb()

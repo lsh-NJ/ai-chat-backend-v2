@@ -39,6 +39,23 @@ def _vector_from_sequence(values: object, name: str = "vector") -> list[float]:
     return result
 
 
+def validate_embedding(
+    values: object,
+    *,
+    dimensions: int | None = None,
+    name: str = "embedding",
+) -> list[float]:
+    """校验一个 embedding 是否为非空、有限、维度正确的数字序列。"""
+    vector = _vector_from_sequence(values, name)
+    if dimensions is not None and len(vector) != dimensions:
+        raise ValueError(
+            f"{name} dimension must be {dimensions}, got {len(vector)}"
+        )
+    if math.fsum(value * value for value in vector) == 0.0:
+        raise ValueError(f"{name} must not be a zero vector")
+    return vector
+
+
 def _unit_vector(values: Sequence[float]) -> list[float]:
     vector = _vector_from_sequence(values)
     norm = math.sqrt(math.fsum(value * value for value in vector))

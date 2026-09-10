@@ -91,3 +91,21 @@ class Retriever(Protocol):
     ) -> Sequence[ChunkHit]:
         """按 query 召回 top_k 个 chunk hits。"""
         ...
+
+
+@runtime_checkable
+class AsyncRetriever(Protocol):
+    """异步 RAG 检索器契约。
+
+    语义与 `Retriever` 完全一致，只是数据库 I/O 需要通过 await 完成。
+    """
+
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 10,
+        metadata_filter: Mapping[str, Any] | None = None,
+    ) -> Sequence[ChunkHit]:
+        """按 query 异步召回 top_k 个 chunk hits。"""
+        ...
