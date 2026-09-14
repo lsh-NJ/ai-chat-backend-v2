@@ -1,13 +1,12 @@
-"""RAG 问答服务（Week 16 Day 1）。
+"""RAG 问答服务（Week 16 Day 1-2）。
 
 服务层负责编排，不负责具体检索算法、prompt 文本或模型协议：
 1. 调用 AsyncRetriever 获取证据；
 2. 调用 RagContextBuilder 构造上下文与引用编号；
 3. 调用 LLMProvider 生成回答；
-4. 组装 RagAnswer。
+4. 校验回答引用并组装 RagAnswer。
 
-Day 1 只做基础空证据拒答；更细的引用校验、低分拒答和权限负例在
-Day 2/Day 3 增强。
+Day 1 做基础空证据拒答；Day 2 增加引用解析与未知编号校验。
 """
 
 from __future__ import annotations
@@ -17,6 +16,7 @@ from typing import Any
 
 from app.llm.contracts import LLMProvider
 from app.rag.answer import RagAnswer
+from app.rag.citation import validate_answer_citations
 from app.rag.context_builder import RagContextBuilder
 from app.rag.retrieval import (
     AsyncRetriever,
@@ -88,9 +88,13 @@ class RagQueryService:
             )
 
         answer = await self._provider.complete(context.messages)
+        used_citations = validate_answer_citations(
+            answer,
+            context.citations,
+        )
         return RagAnswer(
             answer=answer,
-            citations=context.citations,
+            citations=used_citations,
             retrieved_chunk_ids=context.retrieved_chunk_ids,
             refused=False,
         )

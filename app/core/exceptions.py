@@ -35,6 +35,11 @@ class ConversationNotFoundError(Exception):
     pass
 
 
+# RAG 生成结果校验错误：
+class RagCitationError(Exception):
+    """模型回答引用了本次检索结果中不存在的编号。"""
+
+
 # 密码与身份认证错误：
 class UsernameAlreadyExistsError(Exception):
     """账户已存在"""

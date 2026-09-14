@@ -8,12 +8,33 @@ from app.llm.context import ContextSelector
 from app.llm.tokenization import ContextBudget
 from app.main import create_app
 from app.rag.chunking import Chunk
+from app.rag.dense import hash_embed
+from app.rag.documents import Document
+from app.rag.postgres_store import PostgresChunkStore, PostgresDocumentStore
 from app.rag.retrieval import ChunkHit
 from app.tests.fakes import (
     ContentLengthTokenCounter,
     FakeLLMProvider,
     FakeRetriever,
 )
+
+
+def _chunk(
+    *,
+    chunk_id: str,
+    document_id: str,
+    source: str,
+    content: str,
+) -> Chunk:
+    return Chunk(
+        id=chunk_id,
+        document_id=document_id,
+        source=source,
+        content=content,
+        metadata={"lang": "zh"},
+        start=0,
+        end=len(content),
+    )
 
 
 def _hit() -> ChunkHit:
@@ -38,6 +59,38 @@ def _selector() -> ContextSelector:
         ContentLengthTokenCounter(),
         ContextBudget(context_window=10_000, output_reserve=1),
     )
+
+
+async def _seed_chunk(
+    *,
+    tenant_id: str,
+    document_id: str,
+    chunk_id: str,
+    content: str,
+) -> None:
+    source = f"docs/{document_id}.md"
+    async with AsyncSessionFactory() as session:
+        await PostgresDocumentStore(session, tenant_id=tenant_id).save(
+            Document(
+                id=document_id,
+                source=source,
+                content=content,
+                metadata={"version": 1},
+            )
+        )
+        await PostgresChunkStore(session, tenant_id=tenant_id).save_chunks(
+            document_id,
+            [
+                _chunk(
+                    chunk_id=chunk_id,
+                    document_id=document_id,
+                    source=source,
+                    content=content,
+                )
+            ],
+            embedder=hash_embed,
+        )
+        await session.commit()
 
 
 @asynccontextmanager
@@ -142,3 +195,64 @@ async def test_rag_query_refuses_when_no_evidence(
     assert body["refused"] is True
     assert body["citations"] == []
     assert provider.complete_calls == []
+
+
+async def test_rag_query_invalid_citation_returns_502(
+    fresh_schema,
+    create_test_user,
+) -> None:
+    user = await create_test_user("rag-invalid-citation")
+    headers = {"Authorization": f"Bearer {create_access_token(user.id)}"}
+    provider = FakeLLMProvider(complete_result="依据 [99] 可以回答。")
+
+    async with _client_with_retriever(FakeRetriever([_hit()]), provider) as client:
+        response = await client.post(
+            "/rag/query",
+            json={"question": "退款怎么申请？"},
+            headers=headers,
+        )
+
+    assert response.status_code == 502
+    assert "[99]" in response.json()["detail"]
+
+
+async def test_rag_query_uses_real_postgres_and_isolates_tenant(
+    client,
+    llm_provider,
+    create_test_user,
+) -> None:
+    user = await create_test_user("rag-real-postgres")
+    headers = {"Authorization": f"Bearer {create_access_token(user.id)}"}
+    own_tenant = f"user:{user.id}"
+
+    await _seed_chunk(
+        tenant_id=own_tenant,
+        document_id="refund-doc::v1",
+        chunk_id="refund-own",
+        content="退款需要先提交申请，审核通过后退款到账。",
+    )
+    await _seed_chunk(
+        tenant_id="user:999999",
+        document_id="refund-secret::v1",
+        chunk_id="refund-secret",
+        content="其他租户的秘密退款流程：先联系董事长。",
+    )
+
+    llm_provider.complete_result = "退款需要先提交申请 [1]。"
+    response = await client.post(
+        "/rag/query",
+        json={"question": "退款怎么申请？", "top_k": 5},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["refused"] is False
+    assert [citation["chunk_id"] for citation in body["citations"]] == [
+        "refund-own"
+    ]
+
+    assert len(llm_provider.complete_calls) == 1
+    sent_prompt = llm_provider.complete_calls[0][1].content
+    assert "退款需要先提交申请" in sent_prompt
+    assert "其他租户的秘密退款流程" not in sent_prompt

@@ -1,17 +1,18 @@
-"""RAG 问答 API（Week 16 Day 1）。
+"""RAG 问答 API（Week 16 Day 1-2）。
 
 边界：
 - 认证由 `get_current_user` 完成；
 - `tenant_id` 由服务端根据认证用户推导，客户端请求体不包含该字段；
-- Retriever 由组合根创建，API 层不关心 pgvector / FTS 细节。
+- Retriever 由组合根创建，API 层不关心 pgvector / FTS 细节；
+- 模型回答引用了不存在的编号时，校验失败按上游响应错误返回 502。
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.errors import to_http_exception
 from app.core.deps import get_current_user
-from app.core.exceptions import LLMServiceError
+from app.core.exceptions import LLMServiceError, RagCitationError
 from app.db.session import get_db
 from app.models.user import User
 from app.rag.answer import RagAnswer
@@ -77,5 +78,10 @@ async def rag_query(
         )
     except LLMServiceError as exc:
         raise to_http_exception(exc) from exc
+    except RagCitationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        ) from exc
 
     return _to_response(answer)

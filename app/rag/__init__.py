@@ -3,6 +3,10 @@
 from app.rag.answer import RagAnswer, RagCitation, RagContext
 from app.rag.bm25 import InMemoryBM25Retriever, tokenize
 from app.rag.chunking import Chunk, chunk_document
+from app.rag.citation import (
+    extract_citation_labels,
+    validate_answer_citations,
+)
 from app.rag.composition import (
     RagRetrieverFactory,
     create_postgres_hybrid_retriever,
@@ -70,6 +74,8 @@ __all__ = [
     "cosine_similarity",
     "create_postgres_hybrid_retriever",
     "evaluate_retriever",
+    "extract_citation_labels",
+    "validate_answer_citations",
     "hash_embed",
     "ndcg_at_k",
     "recall_at_k",
