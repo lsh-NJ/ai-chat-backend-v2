@@ -1,7 +1,13 @@
 """RAG 数据管线：文档模型、解析、切分与入库。"""
 
+from app.rag.answer import RagAnswer, RagCitation, RagContext
 from app.rag.bm25 import InMemoryBM25Retriever, tokenize
 from app.rag.chunking import Chunk, chunk_document
+from app.rag.composition import (
+    RagRetrieverFactory,
+    create_postgres_hybrid_retriever,
+)
+from app.rag.context_builder import RagContextBuilder
 from app.rag.dense import (
     InMemoryDenseRetriever,
     cosine_similarity,
@@ -55,8 +61,14 @@ __all__ = [
     "Document",
     "EvalQuery",
     "InMemoryDenseRetriever",
+    "RagAnswer",
+    "RagCitation",
+    "RagContext",
+    "RagContextBuilder",
+    "RagRetrieverFactory",
     "RetrievalReport",
     "cosine_similarity",
+    "create_postgres_hybrid_retriever",
     "evaluate_retriever",
     "hash_embed",
     "ndcg_at_k",

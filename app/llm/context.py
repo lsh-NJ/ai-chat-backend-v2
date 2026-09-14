@@ -23,6 +23,16 @@ class ContextSelector:
         self._counter = counter
         self._budget = budget
 
+    @property
+    def counter(self) -> TokenCounter:
+        """暴露计数器，让其他上下文构造器复用同一套 token 计量规则。"""
+        return self._counter
+
+    @property
+    def budget(self) -> ContextBudget:
+        """暴露预算对象，避免调用方绕过统一预算重新计算。"""
+        return self._budget
+
     def select(
         self,
         *,

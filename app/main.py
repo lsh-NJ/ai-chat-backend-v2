@@ -9,6 +9,7 @@ import app.models.user  # noqa: F401  # 注册模型，避免运行期 Mapper �
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversations_router
+from app.api.rag import router as rag_router
 from app.api.structured import router as structured_router
 from app.api.user import router as user_router
 from app.core.exceptions import LLMConfigurationError
@@ -19,6 +20,11 @@ from app.llm.contracts import LLMProvider
 from app.llm.deepseek_v4_tokenizer import DeepSeekV4TokenCounter
 from app.llm.providers.deepseek import DeepSeekConfig, DeepSeekProvider
 from app.llm.tokenization import ContextBudget
+from app.rag.composition import (
+    RagRetrieverFactory,
+    create_postgres_hybrid_retriever,
+)
+from app.rag.context_builder import RagContextBuilder
 
 REDIS_URL = os.environ["REDIS_URL"]
 
@@ -39,6 +45,8 @@ def _read_non_negative_int(name: str, *, positive: bool = False) -> int:
 def create_app(
     llm_provider: LLMProvider | None = None,
     context_selector: ContextSelector | None = None,
+    rag_context_builder: RagContextBuilder | None = None,
+    rag_retriever_factory: RagRetrieverFactory | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -72,6 +80,15 @@ def create_app(
                 raise LLMConfigurationError("LLM 上下文预算配置非法") from exc
             runtime_selector = ContextSelector(counter, budget)
 
+        assert runtime_selector is not None
+        runtime_context_builder = rag_context_builder or RagContextBuilder(
+            runtime_selector.counter,
+            runtime_selector.budget,
+        )
+        runtime_retriever_factory = (
+            rag_retriever_factory or create_postgres_hybrid_retriever
+        )
+
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
 
@@ -95,6 +112,8 @@ def create_app(
                     )
                 app.state.redis = redis
                 app.state.context_selector = runtime_selector
+                app.state.rag_context_builder = runtime_context_builder
+                app.state.rag_retriever_factory = runtime_retriever_factory
                 yield
             finally:
                 await close_redis(redis)
@@ -115,6 +134,7 @@ def create_app(
     application.include_router(auth_router)
     application.include_router(user_router)
     application.include_router(structured_router)
+    application.include_router(rag_router)
     return application
 
 

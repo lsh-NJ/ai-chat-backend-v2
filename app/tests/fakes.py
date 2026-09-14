@@ -1,7 +1,14 @@
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Mapping,
+    Sequence,
+)
 from typing import Any
 
 from app.llm.contracts import JSONSchema, LLMMessage
+from app.rag.retrieval import ChunkHit
 
 
 class ContentLengthTokenCounter:
@@ -9,6 +16,24 @@ class ContentLengthTokenCounter:
 
     def count_messages(self, messages: Sequence[LLMMessage]) -> int:
         return sum(len(message.content) for message in messages)
+
+
+class FakeRetriever:
+    """显式测试替身，实现 AsyncRetriever 契约并记录调用参数。"""
+
+    def __init__(self, hits: Sequence[ChunkHit]) -> None:
+        self.hits = tuple(hits)
+        self.calls: list[tuple[str, int, Mapping[str, Any] | None]] = []
+
+    async def search(
+        self,
+        query: str,
+        *,
+        top_k: int = 10,
+        metadata_filter: Mapping[str, Any] | None = None,
+    ) -> Sequence[ChunkHit]:
+        self.calls.append((query, top_k, metadata_filter))
+        return self.hits
 
 CompleteHandler = Callable[[Sequence[LLMMessage]], Awaitable[str]]
 StreamHandler = Callable[[Sequence[LLMMessage]], AsyncIterator[str]]
