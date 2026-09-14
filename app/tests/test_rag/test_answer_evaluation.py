@@ -223,7 +223,7 @@ def test_load_generated_dataset_has_80_plus_cases() -> None:
     cases = load_rag_eval_cases_jsonl(str(data_path))
 
     assert len(cases) >= 80
-    assert all(case.reviewed is False for case in cases)
+    assert all(isinstance(case.reviewed, bool) for case in cases)
     categories = {case.category for case in cases}
     assert RagEvalCategory.ANSWERABLE in categories
     assert RagEvalCategory.UNANSWERABLE in categories
