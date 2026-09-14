@@ -67,6 +67,7 @@ async def rag_query(
         retriever = request.app.state.rag_retriever_factory(
             session,
             user_tenant_id(current_user),
+            request.app.state.rag_embedder,
         )
         service = RagQueryService(
             retriever=retriever,

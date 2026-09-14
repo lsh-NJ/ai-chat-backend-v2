@@ -46,7 +46,11 @@ from app.llm.context import ContextSelector  # noqa: E402
 from app.llm.tokenization import ContextBudget  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models.user import User  # noqa: E402
-from app.tests.fakes import ContentLengthTokenCounter, FakeLLMProvider  # noqa: E402
+from app.tests.fakes import (  # noqa: E402
+    ContentLengthTokenCounter,
+    DeterministicEmbedder,
+    FakeLLMProvider,
+)
 
 # 这是一个固定的有效 bcrypt 哈希，只用于构造不关心密码流程的测试用户。
 # 注册/登录测试仍会调用真实的 hash_password / verify_password。
@@ -166,6 +170,7 @@ async def client(fresh_schema, redis_client, llm_provider, context_selector):
     test_app = create_app(
         llm_provider=llm_provider,
         context_selector=context_selector,
+        rag_embedder=DeterministicEmbedder(),
     )
     test_app.dependency_overrides[get_db] = override_get_db
     async with test_app.router.lifespan_context(test_app):

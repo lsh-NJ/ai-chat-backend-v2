@@ -8,7 +8,6 @@ from app.llm.context import ContextSelector
 from app.llm.tokenization import ContextBudget
 from app.main import create_app
 from app.rag.chunking import Chunk
-from app.rag.dense import hash_embed
 from app.rag.documents import Document
 from app.rag.postgres_store import PostgresChunkStore, PostgresDocumentStore
 from app.rag.retrieval import ChunkHit
@@ -16,6 +15,7 @@ from app.tests.fakes import (
     ContentLengthTokenCounter,
     FakeLLMProvider,
     FakeRetriever,
+    deterministic_embed,
 )
 
 
@@ -88,7 +88,7 @@ async def _seed_chunk(
                     content=content,
                 )
             ],
-            embedder=hash_embed,
+            embedder=deterministic_embed,
         )
         await session.commit()
 
@@ -98,7 +98,7 @@ async def _client_with_retriever(retriever, provider):
     test_app = create_app(
         llm_provider=provider,
         context_selector=_selector(),
-        rag_retriever_factory=lambda session, tenant_id: retriever,
+        rag_retriever_factory=lambda session, tenant_id, embedder: retriever,
     )
 
     async def override_get_db():

@@ -16,7 +16,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from app.llm.contracts import LLMProvider
+from app.llm.contracts import LLMMessage, LLMProvider
+from app.llm.observability import TokenCounter, TokenUsage
 from app.rag.answer import RagAnswer
 from app.rag.citation import validate_answer_citations
 from app.rag.context_builder import RagContextBuilder
@@ -41,6 +42,7 @@ class RagQueryService:
         provider: LLMProvider,
         context_builder: RagContextBuilder,
         refusal_policy: RagRefusalPolicy | None = None,
+        token_counter: TokenCounter | None = None,
     ) -> None:
         if not isinstance(retriever, AsyncRetriever):
             raise TypeError("retriever must implement AsyncRetriever")
@@ -53,11 +55,14 @@ class RagQueryService:
             RagRefusalPolicy,
         ):
             raise TypeError("refusal_policy must be a RagRefusalPolicy")
+        if token_counter is not None and not callable(token_counter):
+            raise TypeError("token_counter must be callable or None")
 
         self._retriever = retriever
         self._provider = provider
         self._context_builder = context_builder
         self._refusal_policy = refusal_policy or RagRefusalPolicy()
+        self._token_counter = token_counter
 
     async def ask(
         self,
@@ -123,12 +128,27 @@ class RagQueryService:
                 retrieved_chunk_ids=context.retrieved_chunk_ids,
             )
 
+        usage = self._measure_usage(context.messages, answer)
         return RagAnswer(
             answer=answer,
             citations=used_citations,
             retrieved_chunk_ids=context.retrieved_chunk_ids,
             refused=False,
+            input_tokens=usage.input_tokens if usage is not None else None,
+            output_tokens=usage.output_tokens if usage is not None else None,
         )
+
+    def _measure_usage(
+        self,
+        messages: Sequence[LLMMessage],
+        answer: str,
+    ) -> TokenUsage | None:
+        if self._token_counter is None:
+            return None
+        usage = self._token_counter(messages, answer)
+        if not isinstance(usage, TokenUsage):
+            raise TypeError("token_counter must return TokenUsage")
+        return usage
 
     @staticmethod
     def _refusal(

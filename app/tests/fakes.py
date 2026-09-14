@@ -8,6 +8,8 @@ from collections.abc import (
 from typing import Any
 
 from app.llm.contracts import JSONSchema, LLMMessage
+from app.models.rag import RAG_EMBEDDING_DIMENSION
+from app.rag.dense import hash_embed
 from app.rag.retrieval import ChunkHit
 
 
@@ -16,6 +18,25 @@ class ContentLengthTokenCounter:
 
     def count_messages(self, messages: Sequence[LLMMessage]) -> int:
         return sum(len(message.content) for message in messages)
+
+
+def deterministic_embed(text: str) -> list[float]:
+    """测试用确定性 512 维玩具 embedding。"""
+    return hash_embed(text, dimensions=RAG_EMBEDDING_DIMENSION)
+
+
+class DeterministicEmbedder:
+    """测试用 Embedder，避免真库测试下载真实模型。"""
+
+    @property
+    def dimension(self) -> int:
+        return RAG_EMBEDDING_DIMENSION
+
+    def embed_query(self, text: str) -> list[float]:
+        return deterministic_embed(text)
+
+    def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        return [deterministic_embed(text) for text in texts]
 
 
 class FakeRetriever:

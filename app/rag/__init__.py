@@ -1,6 +1,13 @@
 """RAG 数据管线：文档模型、解析、切分与入库。"""
 
 from app.rag.answer import RagAnswer, RagCitation, RagContext
+from app.rag.answer_evaluation import (
+    RagEvalCase,
+    RagEvalCategory,
+    RagEvalReport,
+    RagEvaluator,
+    load_rag_eval_cases_jsonl,
+)
 from app.rag.bm25 import InMemoryBM25Retriever, tokenize
 from app.rag.chunking import Chunk, chunk_document
 from app.rag.citation import (
@@ -19,6 +26,11 @@ from app.rag.dense import (
     validate_embedding,
 )
 from app.rag.documents import Document, compute_content_hash
+from app.rag.embedding import (
+    Embedder,
+    SentenceTransformerEmbedder,
+    create_embedder_from_env,
+)
 from app.rag.evaluation import (
     EvalQuery,
     RetrievalReport,
@@ -68,21 +80,29 @@ __all__ = [
     "Chunk",
     "ChunkHit",
     "Document",
+    "Embedder",
     "EvalQuery",
     "InMemoryDenseRetriever",
     "RagAnswer",
     "RagCitation",
     "RagContext",
     "RagContextBuilder",
+    "RagEvalCase",
+    "RagEvalCategory",
+    "RagEvalReport",
+    "RagEvaluator",
     "RagRefusalPolicy",
     "RagRetrieverFactory",
     "REFUSAL_ANSWER",
     "RefusalReason",
     "RetrievalReport",
+    "SentenceTransformerEmbedder",
     "cosine_similarity",
+    "create_embedder_from_env",
     "create_postgres_hybrid_retriever",
     "evaluate_retriever",
     "extract_citation_labels",
+    "load_rag_eval_cases_jsonl",
     "validate_answer_citations",
     "hash_embed",
     "ndcg_at_k",

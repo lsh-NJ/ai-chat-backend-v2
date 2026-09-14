@@ -25,6 +25,7 @@ from app.rag.composition import (
     create_postgres_hybrid_retriever,
 )
 from app.rag.context_builder import RagContextBuilder
+from app.rag.embedding import Embedder, create_embedder_from_env
 
 REDIS_URL = os.environ["REDIS_URL"]
 
@@ -47,6 +48,7 @@ def create_app(
     context_selector: ContextSelector | None = None,
     rag_context_builder: RagContextBuilder | None = None,
     rag_retriever_factory: RagRetrieverFactory | None = None,
+    rag_embedder: Embedder | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -88,6 +90,7 @@ def create_app(
         runtime_retriever_factory = (
             rag_retriever_factory or create_postgres_hybrid_retriever
         )
+        runtime_embedder = rag_embedder or create_embedder_from_env()
 
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
@@ -114,6 +117,7 @@ def create_app(
                 app.state.context_selector = runtime_selector
                 app.state.rag_context_builder = runtime_context_builder
                 app.state.rag_retriever_factory = runtime_retriever_factory
+                app.state.rag_embedder = runtime_embedder
                 yield
             finally:
                 await close_redis(redis)

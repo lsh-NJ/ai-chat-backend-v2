@@ -29,6 +29,15 @@ def _validate_score(score: object) -> float:
     return value
 
 
+def _validate_optional_token_count(value: object, field_name: str) -> None:
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"{field_name} must be an integer or None")
+    if value < 0:
+        raise ValueError(f"{field_name} must not be negative")
+
+
 @dataclass(frozen=True, slots=True)
 class RagCitation:
     """回答引用的一条证据，指向一个可追踪回原文的 chunk。
@@ -76,6 +85,8 @@ class RagAnswer:
     retrieved_chunk_ids: tuple[str, ...]
     refused: bool = False
     refusal_reason: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
     def __post_init__(self) -> None:
         _require_non_empty_string(self.answer, "answer")
@@ -97,6 +108,8 @@ class RagAnswer:
             raise TypeError("refused must be a boolean")
         if self.refusal_reason is not None:
             _require_non_empty_string(self.refusal_reason, "refusal_reason")
+        _validate_optional_token_count(self.input_tokens, "input_tokens")
+        _validate_optional_token_count(self.output_tokens, "output_tokens")
 
 
 @dataclass(frozen=True, slots=True)

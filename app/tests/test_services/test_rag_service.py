@@ -1,6 +1,7 @@
 import pytest
 
 from app.core.exceptions import RagCitationError
+from app.llm.observability import TokenUsage
 from app.llm.tokenization import ContextBudget
 from app.rag.chunking import Chunk
 from app.rag.context_builder import RagContextBuilder
@@ -63,6 +64,24 @@ async def test_ask_returns_answer_with_citations() -> None:
     assert retriever.calls == [("退款怎么申请？", 3, None)]
     assert len(provider.complete_calls) == 1
     assert "[1] 来源: docs/refund.md" in provider.complete_calls[0][1].content
+
+
+async def test_ask_records_token_usage_when_counter_provided() -> None:
+    provider = FakeLLMProvider(complete_result="退款需要先提交申请 [1]。")
+    service = RagQueryService(
+        FakeRetriever([_hit()]),
+        provider,
+        _builder(),
+        token_counter=lambda messages, answer: TokenUsage(
+            input_tokens=len(messages),
+            output_tokens=len(answer),
+        ),
+    )
+
+    answer = await service.ask("退款怎么申请？")
+
+    assert answer.input_tokens == 2
+    assert answer.output_tokens == len("退款需要先提交申请 [1]。")
 
 
 async def test_ask_returns_only_citations_used_by_answer() -> None:

@@ -33,7 +33,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
-RAG_EMBEDDING_DIMENSION = 128
+RAG_EMBEDDING_DIMENSION = 512
 
 
 class RagDocument(Base):

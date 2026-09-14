@@ -8,7 +8,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.db.session import AsyncSessionFactory, engine
-from app.models.rag import RagChunk, RagDocument
+from app.models.rag import RAG_EMBEDDING_DIMENSION, RagChunk, RagDocument
 
 
 async def test_pgvector_extension_is_enabled(fresh_schema) -> None:
@@ -111,7 +111,7 @@ async def test_rag_document_and_chunk_orm_roundtrip(fresh_schema) -> None:
             chunk_metadata={"chunk_index": 0},
             start=0,
             end=6,
-            embedding=[0.1] * 128,
+            embedding=[0.1] * RAG_EMBEDDING_DIMENSION,
         )
         session.add_all([document, chunk])
         await session.commit()
@@ -133,7 +133,7 @@ async def test_rag_document_and_chunk_orm_roundtrip(fresh_schema) -> None:
     assert chunk.start == 0
     assert chunk.end == 6
     assert chunk.embedding is not None
-    assert len(chunk.embedding) == 128
+    assert len(chunk.embedding) == RAG_EMBEDDING_DIMENSION
     assert chunk.embedding[0] == pytest.approx(0.1)
 
 

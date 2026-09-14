@@ -14,7 +14,7 @@ from app.rag.retrieval import AsyncRetriever
 
 
 def keyword_embedder(text: str) -> list[float]:
-    """把关键词计数当成可预测的 128 维玩具 embedding。"""
+    """把关键词计数当成可预测的固定维度玩具 embedding。"""
     vector = [0.0] * RAG_EMBEDDING_DIMENSION
     lowered = text.lower()
     for index, term in enumerate(("apple", "banana", "car", "phone")):
