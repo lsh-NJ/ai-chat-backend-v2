@@ -4,8 +4,13 @@ from app.core.exceptions import RagCitationError
 from app.llm.tokenization import ContextBudget
 from app.rag.chunking import Chunk
 from app.rag.context_builder import RagContextBuilder
+from app.rag.refusal import (
+    REFUSAL_ANSWER,
+    RagRefusalPolicy,
+    RefusalReason,
+)
 from app.rag.retrieval import ChunkHit
-from app.services.rag_service import REFUSAL_ANSWER, RagQueryService
+from app.services.rag_service import RagQueryService
 from app.tests.fakes import (
     ContentLengthTokenCounter,
     FakeLLMProvider,
@@ -103,4 +108,64 @@ async def test_ask_refuses_when_retriever_returns_no_hits() -> None:
     assert answer.answer == REFUSAL_ANSWER
     assert answer.citations == ()
     assert answer.retrieved_chunk_ids == ()
+    assert answer.refusal_reason == RefusalReason.NO_RETRIEVAL_HITS.value
     assert provider.complete_calls == []
+
+
+async def test_ask_refuses_low_top_score_when_policy_enabled() -> None:
+    policy = RagRefusalPolicy(min_top_score=0.5)
+    provider = FakeLLMProvider()
+    service = RagQueryService(
+        FakeRetriever([_hit(score=0.1)]),
+        provider,
+        _builder(),
+        refusal_policy=policy,
+    )
+
+    answer = await service.ask("退款怎么申请？")
+
+    assert answer.refused is True
+    assert answer.refusal_reason == RefusalReason.LOW_EVIDENCE_SCORE.value
+    assert provider.complete_calls == []
+
+
+async def test_ask_normalizes_model_refusal() -> None:
+    provider = FakeLLMProvider(complete_result=REFUSAL_ANSWER)
+    service = RagQueryService(FakeRetriever([_hit()]), provider, _builder())
+
+    answer = await service.ask("退款怎么申请？")
+
+    assert answer.refused is True
+    assert answer.answer == REFUSAL_ANSWER
+    assert answer.citations == ()
+    assert answer.refusal_reason == RefusalReason.MODEL_REFUSED.value
+    assert len(provider.complete_calls) == 1
+
+
+async def test_ask_refuses_uncited_non_refusal_answer() -> None:
+    provider = FakeLLMProvider(complete_result="退款需要先提交申请。")
+    service = RagQueryService(FakeRetriever([_hit()]), provider, _builder())
+
+    answer = await service.ask("退款怎么申请？")
+
+    assert answer.refused is True
+    assert answer.answer == REFUSAL_ANSWER
+    assert answer.citations == ()
+    assert answer.refusal_reason == RefusalReason.MISSING_CITATION.value
+
+
+async def test_ask_allows_uncited_answer_when_policy_disables_citation_rule() -> None:
+    policy = RagRefusalPolicy(require_citation=False)
+    provider = FakeLLMProvider(complete_result="退款需要先提交申请。")
+    service = RagQueryService(
+        FakeRetriever([_hit()]),
+        provider,
+        _builder(),
+        refusal_policy=policy,
+    )
+
+    answer = await service.ask("退款怎么申请？")
+
+    assert answer.refused is False
+    assert answer.answer == "退款需要先提交申请。"
+    assert answer.citations == ()

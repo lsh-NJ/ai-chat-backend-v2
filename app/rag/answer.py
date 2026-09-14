@@ -75,6 +75,7 @@ class RagAnswer:
     citations: tuple[RagCitation, ...]
     retrieved_chunk_ids: tuple[str, ...]
     refused: bool = False
+    refusal_reason: str | None = None
 
     def __post_init__(self) -> None:
         _require_non_empty_string(self.answer, "answer")
@@ -94,6 +95,8 @@ class RagAnswer:
             raise ValueError("retrieved chunk ids must be non-empty strings")
         if not isinstance(self.refused, bool):
             raise TypeError("refused must be a boolean")
+        if self.refusal_reason is not None:
+            _require_non_empty_string(self.refusal_reason, "refusal_reason")
 
 
 @dataclass(frozen=True, slots=True)

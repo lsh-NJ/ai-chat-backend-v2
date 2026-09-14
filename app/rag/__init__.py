@@ -47,6 +47,11 @@ from app.rag.parsers import (
 from app.rag.postgres_dense import PostgresDenseRetriever
 from app.rag.postgres_fts import PostgresFullTextRetriever
 from app.rag.postgres_store import PostgresChunkStore, PostgresDocumentStore
+from app.rag.refusal import (
+    REFUSAL_ANSWER,
+    RagRefusalPolicy,
+    RefusalReason,
+)
 from app.rag.retrieval import AsyncRetriever, ChunkHit, Retriever
 from app.rag.store import (
     AsyncChunkStore,
@@ -69,7 +74,10 @@ __all__ = [
     "RagCitation",
     "RagContext",
     "RagContextBuilder",
+    "RagRefusalPolicy",
     "RagRetrieverFactory",
+    "REFUSAL_ANSWER",
+    "RefusalReason",
     "RetrievalReport",
     "cosine_similarity",
     "create_postgres_hybrid_retriever",

@@ -193,6 +193,7 @@ async def test_rag_query_refuses_when_no_evidence(
     assert response.status_code == 200
     body = response.json()
     assert body["refused"] is True
+    assert body["refusal_reason"] == "no_retrieval_hits"
     assert body["citations"] == []
     assert provider.complete_calls == []
 
@@ -256,3 +257,32 @@ async def test_rag_query_uses_real_postgres_and_isolates_tenant(
     sent_prompt = llm_provider.complete_calls[0][1].content
     assert "退款需要先提交申请" in sent_prompt
     assert "其他租户的秘密退款流程" not in sent_prompt
+
+
+async def test_rag_query_refuses_when_only_other_tenant_has_evidence(
+    client,
+    llm_provider,
+    create_test_user,
+) -> None:
+    user = await create_test_user("rag-permission-negative")
+    headers = {"Authorization": f"Bearer {create_access_token(user.id)}"}
+
+    await _seed_chunk(
+        tenant_id="user:888888",
+        document_id="secret-refund::v1",
+        chunk_id="secret-refund",
+        content="另一个租户的秘密退款流程：先联系董事长。",
+    )
+
+    response = await client.post(
+        "/rag/query",
+        json={"question": "退款怎么申请？"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["refused"] is True
+    assert body["refusal_reason"] == "no_retrieval_hits"
+    assert body["citations"] == []
+    assert llm_provider.complete_calls == []

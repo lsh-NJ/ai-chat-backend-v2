@@ -52,6 +52,7 @@ def _to_response(answer: RagAnswer) -> RagAnswerResponse:
         ],
         retrieved_chunk_ids=list(answer.retrieved_chunk_ids),
         refused=answer.refused,
+        refusal_reason=answer.refusal_reason,
     )
 
 

@@ -1,4 +1,4 @@
-"""RAG API 的请求/响应模型（Week 16 Day 1）。"""
+"""RAG API 的请求/响应模型（Week 16 Day 1-3）。"""
 
 from typing import Annotated
 
@@ -34,3 +34,4 @@ class RagAnswerResponse(BaseModel):
     citations: list[RagCitationOut]
     retrieved_chunk_ids: list[str]
     refused: bool
+    refusal_reason: str | None = None
