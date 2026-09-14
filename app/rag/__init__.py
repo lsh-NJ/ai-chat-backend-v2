@@ -9,6 +9,11 @@ from app.rag.answer_evaluation import (
     load_rag_eval_cases_jsonl,
 )
 from app.rag.bm25 import InMemoryBM25Retriever, tokenize
+from app.rag.chinese_bm25 import (
+    AsyncChineseBM25Retriever,
+    ChineseBM25Retriever,
+    tokenize_chinese,
+)
 from app.rag.chunking import Chunk, chunk_document
 from app.rag.citation import (
     extract_citation_labels,
@@ -111,9 +116,11 @@ __all__ = [
     "DocumentParseError",
     "DocumentStore",
     "AsyncChunkStore",
+    "AsyncChineseBM25Retriever",
     "AsyncDocumentStore",
     "AsyncHybridRetriever",
     "AsyncRetriever",
+    "ChineseBM25Retriever",
     "DocumentNotFoundError",
     "PostgresChunkStore",
     "PostgresDenseRetriever",
@@ -122,6 +129,7 @@ __all__ = [
     "Retriever",
     "rrf_fuse",
     "tokenize",
+    "tokenize_chinese",
     "DuplicateContentError",
     "DuplicateIdError",
     "InMemoryDocumentStore",

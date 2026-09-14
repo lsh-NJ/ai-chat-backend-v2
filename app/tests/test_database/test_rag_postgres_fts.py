@@ -201,3 +201,32 @@ async def test_postgres_fts_returns_empty_when_no_match(fresh_schema) -> None:
         hits = await retriever.search("nonexistent", top_k=10)
 
     assert hits == ()
+
+
+async def test_postgres_fts_matches_chinese_with_character_segmentation(
+    fresh_schema,
+) -> None:
+    document_id = "doc-refund::v1"
+    await save_document(
+        tenant_id="tenant-a",
+        document_id=document_id,
+        content="退款流程：先提交申请，再等待审核。",
+    )
+    await save_chunks(
+        tenant_id="tenant-a",
+        document_id=document_id,
+        chunks=[
+            make_chunk(
+                chunk_id="refund-steps",
+                document_id=document_id,
+                content="退款流程：先提交申请，再等待审核。",
+            )
+        ],
+    )
+
+    async with AsyncSessionFactory() as session:
+        retriever = PostgresFullTextRetriever(session, tenant_id="tenant-a")
+        hits = await retriever.search("退款怎么申请", top_k=10)
+
+    assert [hit.chunk.id for hit in hits] == ["refund-steps"]
+    assert hits[0].score > 0

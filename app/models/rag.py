@@ -129,6 +129,14 @@ class RagChunk(Base):
             text("to_tsvector('simple', content)"),
             postgresql_using="gin",
         ),
+        Index(
+            "ix_rag_chunks_content_cjk_fts",
+            text(
+                "to_tsvector('simple'::regconfig, "
+                "regexp_replace(content, '([^[:ascii:]])', ' \\1 ', 'g'))"
+            ),
+            postgresql_using="gin",
+        ),
         CheckConstraint(
             "length(tenant_id) > 0 AND length(chunk_id) > 0",
             name="ck_rag_chunks_tenant_chunk_nonempty",

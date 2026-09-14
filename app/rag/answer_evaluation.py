@@ -48,6 +48,7 @@ class RagEvalCase:
     expected_answer_contains: tuple[str, ...] = ()
     expected_chunk_ids: tuple[str, ...] = ()
     forbidden_answer_contains: tuple[str, ...] = ()
+    reviewed: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not self.id.strip():
@@ -58,6 +59,8 @@ class RagEvalCase:
             raise TypeError("case category must be a RagEvalCategory")
         if not isinstance(self.expected_refused, bool):
             raise TypeError("expected_refused must be a boolean")
+        if not isinstance(self.reviewed, bool):
+            raise TypeError("reviewed must be a boolean")
         _validate_string_tuple(
             self.expected_answer_contains,
             "expected_answer_contains",
@@ -386,6 +389,7 @@ def load_rag_eval_cases_jsonl(path: str) -> tuple[RagEvalCase, ...]:
             forbidden_answer_contains=tuple(
                 record.get("forbidden_answer_contains", [])
             ),
+            reviewed=bool(record.get("reviewed", False)),
         )
         if case.id in seen_ids:
             raise ValueError(f"duplicate eval case id: {case.id}")

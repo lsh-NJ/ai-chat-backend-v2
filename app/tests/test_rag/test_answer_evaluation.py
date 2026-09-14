@@ -211,3 +211,22 @@ def test_load_seed_dataset() -> None:
     assert RagEvalCategory.UNANSWERABLE in categories
     assert RagEvalCategory.PERMISSION_NEGATIVE in categories
     assert RagEvalCategory.PROMPT_INJECTION in categories
+
+
+def test_load_generated_dataset_has_80_plus_cases() -> None:
+    data_path = (
+        Path(__file__).resolve().parents[3]
+        / "eval_data"
+        / "rag_eval_cases.jsonl"
+    )
+
+    cases = load_rag_eval_cases_jsonl(str(data_path))
+
+    assert len(cases) >= 80
+    assert all(case.reviewed is False for case in cases)
+    categories = {case.category for case in cases}
+    assert RagEvalCategory.ANSWERABLE in categories
+    assert RagEvalCategory.UNANSWERABLE in categories
+    assert RagEvalCategory.PERMISSION_NEGATIVE in categories
+    retrieval_cases = [case for case in cases if case.expected_chunk_ids]
+    assert len(retrieval_cases) >= 80
