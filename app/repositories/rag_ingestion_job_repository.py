@@ -75,4 +75,4 @@ class RagIngestionJobRepository:
         )
         result = await self._session.execute(statement)
         row = result.scalar_one_or_none()
-        return None if row is None else _to_domain(row)
+        return None if row is None else row_to_ingestion_job(row)

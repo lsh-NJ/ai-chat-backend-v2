@@ -61,6 +61,10 @@ class RagIngestionJobNotFoundError(RagIngestionError):
     """当前租户下不存在指定的 ingestion job。"""
 
 
+class RagIngestionProcessingError(RagIngestionError):
+    """解析、切分、embedding 或写入检索库时发生的可重试处理错误。"""
+
+
 # 密码与身份认证错误：
 class UsernameAlreadyExistsError(Exception):
     """账户已存在"""

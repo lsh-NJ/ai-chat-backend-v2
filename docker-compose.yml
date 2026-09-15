@@ -121,6 +121,27 @@ services:
     stop_grace_period: 30s
     restart: unless-stopped
 
+  rag-ingestion-worker:
+    <<: *app-image
+    command: ["python", "-m", "app.workers.run_rag_ingestion_worker"]
+    environment:
+      <<: *database-connection
+      REDIS_URL: redis://redis:6379/0
+      RAG_UPLOAD_DIR: /app/data/rag_uploads
+      RAG_INGESTION_LEASE_SECONDS: ${RAG_INGESTION_LEASE_SECONDS:-300}
+      RAG_INGESTION_POLL_SECONDS: ${RAG_INGESTION_POLL_SECONDS:-1.0}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - rag_uploads:/app/data/rag_uploads
+    stop_grace_period: 30s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   rag_uploads:
