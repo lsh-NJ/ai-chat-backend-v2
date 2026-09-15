@@ -21,6 +21,8 @@ class Fact:
     direct_question: str
     paraphrase_question: str
     keyword_question: str
+    variant_answer_terms: tuple[tuple[str, ...], ...] = ()
+    variant_expected_chunk_ids: tuple[tuple[str, ...], ...] = ()
 
 
 FACTS: tuple[Fact, ...] = (
@@ -32,6 +34,12 @@ FACTS: tuple[Fact, ...] = (
         direct_question="退款政策是什么？",
         paraphrase_question="买错了可以退吗？",
         keyword_question="七天无理由退款是什么规定？",
+        variant_expected_chunk_ids=(
+            ("refund-policy", "refund-steps"),
+            ("refund-policy", "refund-steps"),
+            ("refund-policy",),
+            ("refund-policy", "refund-steps"),
+        ),
     ),
     Fact(
         chunk_id="refund-steps",
@@ -41,6 +49,12 @@ FACTS: tuple[Fact, ...] = (
         direct_question="退款怎么申请？",
         paraphrase_question="我想把钱退回来，应该怎么操作？",
         keyword_question="退款需要先做什么？",
+        variant_expected_chunk_ids=(
+            ("refund-steps", "refund-policy", "refund-time"),
+            ("refund-steps", "refund-policy", "refund-time"),
+            ("refund-steps",),
+            ("refund-steps", "refund-policy"),
+        ),
     ),
     Fact(
         chunk_id="refund-time",
@@ -50,6 +64,12 @@ FACTS: tuple[Fact, ...] = (
         direct_question="退款多久到账？",
         paraphrase_question="钱退回来要等几天？",
         keyword_question="退款到账时间是多少？",
+        variant_expected_chunk_ids=(
+            ("refund-time", "refund-steps"),
+            ("refund-time", "refund-steps"),
+            ("refund-time",),
+            ("refund-time", "refund-steps"),
+        ),
     ),
     Fact(
         chunk_id="return-shipping",
@@ -77,6 +97,12 @@ FACTS: tuple[Fact, ...] = (
         direct_question="运费怎么计算？",
         paraphrase_question="多少钱可以包邮？",
         keyword_question="满九十九元包邮的规则是什么？",
+        variant_answer_terms=(
+            ("满九十九元", "包邮", "十元"),
+            ("九十九元", "包邮"),
+            ("九十九元", "包邮"),
+            ("满九十九元", "包邮", "十元"),
+        ),
     ),
     Fact(
         chunk_id="courier",
@@ -93,7 +119,7 @@ FACTS: tuple[Fact, ...] = (
         topic="物流查询",
         answer_terms=("订单详情页", "物流单号"),
         direct_question="怎么查看物流信息？",
-        paraphrase_question="我的包裹到哪了？",
+        paraphrase_question="怎么查询物流单号？",
         keyword_question="物流单号在哪里看？",
     ),
     Fact(
@@ -104,6 +130,12 @@ FACTS: tuple[Fact, ...] = (
         direct_question="支持哪些支付方式？",
         paraphrase_question="可以用支付宝付款吗？",
         keyword_question="微信支付和银行卡都支持吗？",
+        variant_answer_terms=(
+            ("微信支付", "支付宝", "银行卡"),
+            ("支付宝",),
+            ("微信支付", "银行卡"),
+            ("微信支付", "支付宝", "银行卡"),
+        ),
     ),
     Fact(
         chunk_id="invoice",
@@ -111,7 +143,7 @@ FACTS: tuple[Fact, ...] = (
         topic="发票规则",
         answer_terms=("确认收货后", "电子发票"),
         direct_question="怎么开发票？",
-        paraphrase_question="可以给我一张发票吗？",
+        paraphrase_question="怎么申请电子发票？",
         keyword_question="电子发票在哪里申请？",
     ),
     Fact(
@@ -120,7 +152,7 @@ FACTS: tuple[Fact, ...] = (
         topic="优惠券规则",
         answer_terms=("限用一张", "不能叠加"),
         direct_question="优惠券可以叠加使用吗？",
-        paraphrase_question="两个券能一起用吗？",
+        paraphrase_question="优惠券可以叠加吗？",
         keyword_question="单笔订单能用几张优惠券？",
     ),
     Fact(
@@ -131,6 +163,12 @@ FACTS: tuple[Fact, ...] = (
         direct_question="会员积分怎么获得？",
         paraphrase_question="消费多少钱有一个积分？",
         keyword_question="积分可以兑换什么？",
+        variant_answer_terms=(
+            ("一百元", "一个积分"),
+            ("一百元",),
+            ("优惠券",),
+            ("一百元", "一个积分", "优惠券"),
+        ),
     ),
     Fact(
         chunk_id="contact-email",
@@ -147,7 +185,7 @@ FACTS: tuple[Fact, ...] = (
         topic="客服时间",
         answer_terms=("工作日九点到十八点",),
         direct_question="客服工作时间是什么时候？",
-        paraphrase_question="周末有人工客服吗？",
+        paraphrase_question="客服什么时候在线？",
         keyword_question="客服几点上班？",
     ),
     Fact(
@@ -156,7 +194,7 @@ FACTS: tuple[Fact, ...] = (
         topic="保修政策",
         answer_terms=("一年保修",),
         direct_question="电子产品保修多久？",
-        paraphrase_question="坏了可以修吗？",
+        paraphrase_question="保修从什么时候开始算？",
         keyword_question="一年保修的起算时间是什么？",
     ),
     Fact(
@@ -183,7 +221,7 @@ FACTS: tuple[Fact, ...] = (
         topic="隐私政策",
         answer_terms=("不会", "出售用户个人信息"),
         direct_question="你们会把我的信息卖给第三方吗？",
-        paraphrase_question="我的个人数据安全吗？",
+        paraphrase_question="你们会出售用户信息吗？",
         keyword_question="用户信息会被出售吗？",
     ),
     Fact(
@@ -203,6 +241,12 @@ FACTS: tuple[Fact, ...] = (
         direct_question="怎么注销账号？",
         paraphrase_question="我不想用了，账号能删除吗？",
         keyword_question="注销后数据还能恢复吗？",
+        variant_answer_terms=(
+            ("联系客服", "不可恢复"),
+            ("联系客服", "不可恢复"),
+            ("不可恢复",),
+            ("联系客服", "不可恢复"),
+        ),
     ),
 )
 

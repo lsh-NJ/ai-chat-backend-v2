@@ -124,6 +124,7 @@ def test_pinned_v4_counter_loads_checked_resource() -> None:
     counter = DeepSeekV4TokenCounter.from_resource(model=DEEPSEEK_V4_MODEL)
 
     assert counter.count_messages((SYSTEM, CURRENT)) > 0
+    assert counter.count_text("退款流程") > 0
 
 
 def test_v4_counter_rejects_model_or_resource_mismatch(tmp_path: Path) -> None:

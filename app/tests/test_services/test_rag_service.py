@@ -161,6 +161,17 @@ async def test_ask_normalizes_model_refusal() -> None:
     assert len(provider.complete_calls) == 1
 
 
+async def test_ask_recognizes_short_model_refusal_phrase() -> None:
+    provider = FakeLLMProvider(complete_result="资料中没有足够信息。")
+    service = RagQueryService(FakeRetriever([_hit()]), provider, _builder())
+
+    answer = await service.ask("退款怎么申请？")
+
+    assert answer.refused is True
+    assert answer.refusal_reason == RefusalReason.MODEL_REFUSED.value
+    assert answer.answer == REFUSAL_ANSWER
+
+
 async def test_ask_refuses_uncited_non_refusal_answer() -> None:
     provider = FakeLLMProvider(complete_result="退款需要先提交申请。")
     service = RagQueryService(FakeRetriever([_hit()]), provider, _builder())

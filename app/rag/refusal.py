@@ -88,12 +88,11 @@ class RagRefusalPolicy:
 
     @staticmethod
     def is_model_refusal(answer: str) -> bool:
-        """识别模型是否按 prompt 返回了固定拒答文本。"""
+        """识别模型是否返回了资料不足的拒答语义。"""
         if not isinstance(answer, str):
             raise TypeError("answer must be a string")
         normalized = answer.strip().rstrip("。.!！")
-        expected = REFUSAL_ANSWER.rstrip("。")
-        return expected in normalized
+        return "资料中没有足够信息" in normalized
 
     def should_refuse_missing_citation(
         self,

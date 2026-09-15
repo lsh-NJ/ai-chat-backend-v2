@@ -36,6 +36,13 @@ class DeepSeekConfig:
     api_key: str
     model: str
     max_tokens: int
+    temperature: float = 0.7
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.temperature <= 2.0:
+            raise LLMConfigurationError(
+                "LLM_TEMPERATURE 必须在 0 到 2 之间"
+            )
 
     @classmethod
     def from_env(
@@ -64,11 +71,20 @@ class DeepSeekConfig:
         if max_tokens <= 0:
             raise LLMConfigurationError("LLM_MAX_OUTPUT_TOKENS 必须是正整数")
 
+        raw_temperature = values.get("LLM_TEMPERATURE", "0.7")
+        try:
+            temperature = float(raw_temperature)
+        except ValueError as exc:
+            raise LLMConfigurationError("LLM_TEMPERATURE 必须是数字") from exc
+        if not 0.0 <= temperature <= 2.0:
+            raise LLMConfigurationError("LLM_TEMPERATURE 必须在 0 到 2 之间")
+
         return cls(
             base_url=values["DEEPSEEK_BASE_URL"].rstrip("/"),
             api_key=values["DEEPSEEK_API_KEY"],
             model=values["DEEPSEEK_MODEL"],
             max_tokens=max_tokens,
+            temperature=temperature,
         )
 
 
@@ -99,7 +115,7 @@ class DeepSeekProvider:
                 {"role": message.role.value, "content": message.content}
                 for message in messages
             ],
-            "temperature": 0.7,
+            "temperature": self._config.temperature,
             "thinking": {"type": "disabled"},
             "max_tokens": self._config.max_tokens,
         }
@@ -298,7 +314,7 @@ class DeepSeekProvider:
             "messages": [
                 self._serialize_tool_message(message) for message in messages
             ],
-            "temperature": 0.7,
+            "temperature": self._config.temperature,
             "thinking": {"type": "disabled"},
             "max_tokens": self._config.max_tokens,
         }

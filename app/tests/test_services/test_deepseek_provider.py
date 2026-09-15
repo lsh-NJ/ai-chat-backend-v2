@@ -71,6 +71,20 @@ def test_config_from_env_fails_closed_when_required_value_is_missing() -> None:
         )
 
 
+def test_config_from_env_reads_temperature_for_eval() -> None:
+    config = DeepSeekConfig.from_env(
+        {
+            "DEEPSEEK_BASE_URL": "https://llm.test",
+            "DEEPSEEK_API_KEY": "test-api-key",
+            "DEEPSEEK_MODEL": "test-model",
+            "LLM_MAX_OUTPUT_TOKENS": "2048",
+            "LLM_TEMPERATURE": "0",
+        }
+    )
+
+    assert config.temperature == 0.0
+
+
 async def test_complete_translates_contract_to_provider_payload() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
@@ -82,6 +96,7 @@ async def test_complete_translates_contract_to_provider_payload() -> None:
         ]
         assert payload["thinking"] == {"type": "disabled"}
         assert payload["max_tokens"] == 2048
+        assert payload["temperature"] == 0.7
         return httpx.Response(
             200,
             json={"choices": [{"message": {"content": "模型回复"}}]},

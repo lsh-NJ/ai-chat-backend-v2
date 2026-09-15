@@ -104,6 +104,10 @@ class RagEvalCaseResult:
     output_tokens: int | None
     cost: float | None
     error: str | None = None
+    answer: str = ""
+    refusal_reason: str | None = None
+    citation_chunk_ids: tuple[str, ...] = ()
+    retrieved_chunk_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +253,12 @@ class RagEvaluator:
             output_tokens=usage.output_tokens if usage is not None else None,
             cost=cost,
             error=error,
+            answer=answer.answer,
+            refusal_reason=answer.refusal_reason,
+            citation_chunk_ids=tuple(
+                citation.chunk_id for citation in answer.citations
+            ),
+            retrieved_chunk_ids=answer.retrieved_chunk_ids,
         )
 
     @staticmethod

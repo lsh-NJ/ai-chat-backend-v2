@@ -60,6 +60,12 @@ class DeepSeekV4TokenCounter:
         prompt = serialize_deepseek_v4_chat(messages)
         return len(self._tokenizer.encode(prompt, add_special_tokens=False).ids)
 
+    def count_text(self, text: str) -> int:
+        """统计纯文本 token 数，用于估算模型输出 token。"""
+        if not isinstance(text, str):
+            raise TypeError("text must be a string")
+        return len(self._tokenizer.encode(text, add_special_tokens=False).ids)
+
 
 def serialize_deepseek_v4_chat(messages: Sequence[LLMMessage]) -> str:
     """Render the contract's system/user/assistant subset in V4 chat mode.
