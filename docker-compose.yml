@@ -73,9 +73,12 @@ services:
       LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-2048}
       LLM_TOKEN_SAFETY_MARGIN: ${LLM_TOKEN_SAFETY_MARGIN:-256}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      RAG_UPLOAD_DIR: /app/data/rag_uploads
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "${API_PORT:-8000}:8000"
+    volumes:
+      - rag_uploads:/app/data/rag_uploads
     depends_on:
       db:
         condition: service_healthy
@@ -104,6 +107,7 @@ services:
       <<: *database-connection
       REDIS_URL: redis://redis:6379/0
       WORKER_CONSUMER_NAME: ${WORKER_CONSUMER_NAME:-}
+      RAG_UPLOAD_DIR: /app/data/rag_uploads
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       db:
@@ -112,8 +116,11 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - rag_uploads:/app/data/rag_uploads
     stop_grace_period: 30s
     restart: unless-stopped
 
 volumes:
   postgres_data:
+  rag_uploads:

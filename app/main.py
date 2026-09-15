@@ -26,6 +26,7 @@ from app.rag.composition import (
 )
 from app.rag.context_builder import RagContextBuilder
 from app.rag.embedding import Embedder, create_embedder_from_env
+from app.rag.upload_storage import FileStorage, LocalFileStorage
 
 REDIS_URL = os.environ["REDIS_URL"]
 
@@ -49,6 +50,7 @@ def create_app(
     rag_context_builder: RagContextBuilder | None = None,
     rag_retriever_factory: RagRetrieverFactory | None = None,
     rag_embedder: Embedder | None = None,
+    rag_upload_storage: FileStorage | None = None,
 ) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -91,6 +93,7 @@ def create_app(
             rag_retriever_factory or create_postgres_hybrid_retriever
         )
         runtime_embedder = rag_embedder or create_embedder_from_env()
+        runtime_upload_storage = rag_upload_storage or LocalFileStorage.from_env()
 
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
@@ -118,6 +121,7 @@ def create_app(
                 app.state.rag_context_builder = runtime_context_builder
                 app.state.rag_retriever_factory = runtime_retriever_factory
                 app.state.rag_embedder = runtime_embedder
+                app.state.rag_upload_storage = runtime_upload_storage
                 yield
             finally:
                 await close_redis(redis)

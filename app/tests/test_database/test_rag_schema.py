@@ -48,7 +48,9 @@ async def test_rag_tables_exist_with_expected_columns(fresh_schema) -> None:
                 text(
                     "SELECT table_name FROM information_schema.tables "
                     "WHERE table_schema = 'public' "
-                    "AND table_name IN ('rag_documents', 'rag_chunks')"
+                    "AND table_name IN ("
+                    "'rag_documents', 'rag_chunks', 'rag_ingestion_jobs'"
+                    ")"
                 )
             )
         }
@@ -63,7 +65,7 @@ async def test_rag_tables_exist_with_expected_columns(fresh_schema) -> None:
             )
             columns_by_table[table] = {row[0] for row in rows}
 
-    assert tables == {"rag_documents", "rag_chunks"}
+    assert tables == {"rag_documents", "rag_chunks", "rag_ingestion_jobs"}
     assert {
         "tenant_id",
         "document_id",
@@ -86,6 +88,23 @@ async def test_rag_tables_exist_with_expected_columns(fresh_schema) -> None:
         "embedding",
         "created_at",
     } <= columns_by_table["rag_chunks"]
+    assert {
+        "tenant_id",
+        "job_id",
+        "filename",
+        "content_type",
+        "content_sha256",
+        "storage_key",
+        "size_bytes",
+        "status",
+        "attempts",
+        "max_attempts",
+        "error_message",
+        "created_at",
+        "updated_at",
+        "started_at",
+        "finished_at",
+    } <= columns_by_table["rag_ingestion_jobs"]
 
 
 async def test_rag_document_and_chunk_orm_roundtrip(fresh_schema) -> None:

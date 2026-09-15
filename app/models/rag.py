@@ -175,3 +175,89 @@ class RagChunk(Base):
     document: Mapped[RagDocument] = relationship(
         back_populates="chunks",
     )
+
+
+class RagIngestionJob(Base):
+    """一次文档上传对应的异步 ingestion 任务（Week 17 Day 1）。
+
+    该表是“上传 API 立即返回、worker 异步处理”之间的持久化桥梁：
+    API 只负责创建 pending 任务；worker 根据 job_id 领取并推进状态。
+    """
+
+    __tablename__ = "rag_ingestion_jobs"
+
+    __table_args__ = (
+        PrimaryKeyConstraint(
+            "tenant_id",
+            "job_id",
+            name="pk_rag_ingestion_jobs",
+        ),
+        Index(
+            "ix_rag_ingestion_jobs_tenant_status",
+            "tenant_id",
+            "status",
+        ),
+        CheckConstraint(
+            "length(tenant_id) > 0 AND length(job_id) > 0",
+            name="ck_rag_ingestion_jobs_tenant_job_nonempty",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'running', 'succeeded', 'failed')",
+            name="ck_rag_ingestion_jobs_status",
+        ),
+        CheckConstraint(
+            "size_bytes >= 0",
+            name="ck_rag_ingestion_jobs_size_nonnegative",
+        ),
+        CheckConstraint(
+            "attempts >= 0 AND max_attempts > 0 AND attempts <= max_attempts",
+            name="ck_rag_ingestion_jobs_attempts",
+        ),
+    )
+
+    tenant_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    content_type: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        server_default=text("''"),
+    )
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        server_default=text("'pending'"),
+    )
+    attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        server_default=text("3"),
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )

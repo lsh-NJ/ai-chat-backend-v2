@@ -44,6 +44,23 @@ class EmbeddingConfigurationError(Exception):
     """Embedding 模型缺失、加载失败或输出维度非法。"""
 
 
+# 文档上传与 ingestion 任务错误：
+class RagIngestionError(Exception):
+    """文档 ingestion 相关的业务错误基类。"""
+
+
+class RagUploadValidationError(RagIngestionError):
+    """上传文件不满足格式、大小或内容要求。"""
+
+
+class RagUploadTooLargeError(RagIngestionError):
+    """上传文件超过允许的最大字节数。"""
+
+
+class RagIngestionJobNotFoundError(RagIngestionError):
+    """当前租户下不存在指定的 ingestion job。"""
+
+
 # 密码与身份认证错误：
 class UsernameAlreadyExistsError(Exception):
     """账户已存在"""

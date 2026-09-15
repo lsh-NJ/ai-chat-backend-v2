@@ -46,6 +46,7 @@ from app.llm.context import ContextSelector  # noqa: E402
 from app.llm.tokenization import ContextBudget  # noqa: E402
 from app.main import create_app  # noqa: E402
 from app.models.user import User  # noqa: E402
+from app.rag.upload_storage import LocalFileStorage  # noqa: E402
 from app.tests.fakes import (  # noqa: E402
     ContentLengthTokenCounter,
     DeterministicEmbedder,
@@ -101,7 +102,8 @@ async def fresh_schema(migrated_schema, real_redis):
         await conn.execute(
             text(
                 "TRUNCATE TABLE messages, conversations, users, "
-                "rag_chunks, rag_documents RESTART IDENTITY CASCADE"
+                "rag_ingestion_jobs, rag_chunks, rag_documents "
+                "RESTART IDENTITY CASCADE"
             )
         )
     yield
@@ -162,7 +164,19 @@ async def redis_test_client(fresh_schema, real_redis):
 
 
 @pytest.fixture
-async def client(fresh_schema, redis_client, llm_provider, context_selector):
+def rag_upload_storage(tmp_path) -> LocalFileStorage:
+    """每个测试用独立临时目录，避免上传文件跨用例污染。"""
+    return LocalFileStorage(tmp_path / "rag_uploads")
+
+
+@pytest.fixture
+async def client(
+    fresh_schema,
+    redis_client,
+    llm_provider,
+    context_selector,
+    rag_upload_storage,
+):
     async def override_get_db():
         async with AsyncSessionFactory() as session:
             yield session
@@ -171,6 +185,7 @@ async def client(fresh_schema, redis_client, llm_provider, context_selector):
         llm_provider=llm_provider,
         context_selector=context_selector,
         rag_embedder=DeterministicEmbedder(),
+        rag_upload_storage=rag_upload_storage,
     )
     test_app.dependency_overrides[get_db] = override_get_db
     async with test_app.router.lifespan_context(test_app):

@@ -1,8 +1,11 @@
-"""RAG API 的请求/响应模型（Week 16 Day 1-3）。"""
+"""RAG API 的请求/响应模型（Week 16 Day 1-3，Week 17 Day 1 扩展上传任务）。"""
 
+from datetime import datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+from app.rag.ingestion_job import IngestionJobStatus
 
 NonEmptyQuestion = Annotated[
     str,
@@ -35,3 +38,31 @@ class RagAnswerResponse(BaseModel):
     retrieved_chunk_ids: list[str]
     refused: bool
     refusal_reason: str | None = None
+
+
+class RagDocumentUploadResponse(BaseModel):
+    """上传接口只返回任务身份，不等待 ingestion 完成。"""
+
+    job_id: str
+    status: IngestionJobStatus
+    filename: str
+    size_bytes: int
+    content_sha256: str
+    created_at: datetime
+
+
+class RagIngestionJobResponse(BaseModel):
+    """供前端轮询的 ingestion 任务状态。"""
+
+    job_id: str
+    filename: str
+    content_type: str
+    size_bytes: int
+    status: IngestionJobStatus
+    attempts: int
+    max_attempts: int
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None

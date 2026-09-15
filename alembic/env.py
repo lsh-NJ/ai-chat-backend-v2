@@ -11,11 +11,18 @@ from alembic import context
 from app.db.base import Base
 from app.models.conversation import Conversation
 from app.models.message import Message
-from app.models.rag import RagChunk, RagDocument
+from app.models.rag import RagChunk, RagDocument, RagIngestionJob
 from app.models.user import User
 
 # Importing every model registers its table on Base.metadata for autogenerate.
-_REGISTERED_MODELS = (Conversation, Message, RagChunk, RagDocument, User)
+_REGISTERED_MODELS = (
+    Conversation,
+    Message,
+    RagChunk,
+    RagDocument,
+    RagIngestionJob,
+    User,
+)
 
 
 load_dotenv()
